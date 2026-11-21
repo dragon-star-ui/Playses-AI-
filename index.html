@@ -14,7 +14,8 @@
     .bot{align-self:flex-start;background:#1e293b;border:1px solid #334155}
     form{display:flex;gap:8px;padding:10px;border-top:1px solid #334155}
     input{flex:1;padding:10px;border-radius:8px;border:1px solid #334155;background:#0b1120;color:#fff}
-    button{padding:10px 16px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-weight:700}
+    button{padding:10px 16px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}
+    button:disabled{opacity:0.6;cursor:not-allowed}
   </style>
 </head>
 <body>
@@ -23,15 +24,16 @@
     <div id="chat" class="chat"><div class="msg bot">Halo! Coba ketik sesuatu.</div></div>
     <form id="f">
       <input id="inp" type="text" placeholder="Ketik pesanmu" autocomplete="off" required />
-      <button type="submit">Kirim</button>
+      <button id="btn" type="submit">Kirim</button>
     </form>
   </div>
   <script>
-    const BACKEND_API_URL = "https://revolutionary-broadcasting-notebooks-limitations.trycloudflare.com/chat";
+    const BACKEND_API_URL = "https://regular-datebook-outburst.ngrok-free.dev/chat";
     const API_KEY = "playses-ai-key-tetap";
 
     const f = document.getElementById("f");
     const inp = document.getElementById("inp");
+    const btn = document.getElementById("btn");
     const chat = document.getElementById("chat");
     const st = document.getElementById("st");
 
@@ -48,14 +50,20 @@
       e.preventDefault();
       const val = inp.value.trim();
       if (!val) return;
+
       addMsg(val, "user");
       inp.value = "";
+      inp.disabled = true;
+      btn.disabled = true;
       st.textContent = "Membalas...";
       const b = addMsg("...", "bot");
 
       if (!BACKEND_API_URL) {
         b.textContent = "BACKEND_API_URL belum diisi.";
         st.textContent = "Siap";
+        inp.disabled = false;
+        btn.disabled = false;
+        inp.focus();
         return;
       }
 
@@ -64,16 +72,34 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-API-Key": API_KEY
+            "X-API-Key": API_KEY,
+            "ngrok-skip-browser-warning": "true"
           },
           body: JSON.stringify({ message: val })
         });
-        const data = await r.json();
-        b.textContent = data.reply || data.error || JSON.stringify(data);
-        st.textContent = "Siap";
+
+        const rawText = await r.text();
+        let data = {};
+        try {
+          data = JSON.parse(rawText);
+        } catch (_) {
+          data = { error: rawText || ("HTTP " + r.status) };
+        }
+
+        if (!r.ok) {
+          b.textContent = data.error || ("Server balas error HTTP " + r.status);
+          st.textContent = "Error";
+        } else {
+          b.textContent = data.reply || data.error || JSON.stringify(data);
+          st.textContent = "Siap";
+        }
       } catch (err) {
         b.textContent = "Gagal konek ke server: " + err.message;
         st.textContent = "Error";
+      } finally {
+        inp.disabled = false;
+        btn.disabled = false;
+        inp.focus();
       }
     };
   </script>
