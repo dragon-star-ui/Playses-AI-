@@ -6,7 +6,7 @@ const SERVER_UNAVAILABLE_MESSAGE =
 const IDLE_LIMIT_MS = 5 * 60 * 1000; // 5 menit
 const STORAGE_MESSAGES_KEY = "playses_ai_messages_v1";
 const STORAGE_LAST_ACTIVE_KEY = "playses_ai_last_active_v1";
-const WELCOME_MESSAGE = { text: "Halo! Coba ketik sesuatu.", cls: "bot" };
+const WELCOME_MESSAGE = { text: "Hello users, how can I help you? ", cls: "bot" };
 
 // --- 1. Menu Samping (Burger Drawer) ---
 const openDrawerBtn = document.getElementById("openDrawer");
@@ -143,7 +143,7 @@ if (formEl && inpEl && btnEl && stEl && chatEl) {
     inpEl.value = "";
     inpEl.disabled = true;
     btnEl.disabled = true;
-    stEl.textContent = "Membalas...";
+    stEl.textContent = "think...";
     const loadingBubble = appendMessageDOM("...", "bot");
 
     if (!BACKEND_API_URL) {
