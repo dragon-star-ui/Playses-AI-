@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Playses AI</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --panel: #111827;
+      --card: #1e293b;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --border: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    .chat-container {
+      width: 100%;
+      max-width: 680px;
+      height: calc(100dvh - 24px);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+
+    .chat-status {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .chat-box {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .bubble {
+      max-width: 82%;
+      padding: 11px 14px;
+      border-radius: 14px;
+      line-height: 1.45;
+      font-size: 0.95rem;
+      word-break: break-word;
+      white-space: pre-wrap;
+    }
+
+    .bubble.bot {
+      align-self: flex-start;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble.user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-input-area {
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.75);
+      display: flex;
+      gap: 8px;
+    }
+
+    #chatInput {
+      flex: 1;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    #chatInput::placeholder {
+      color: var(--muted);
+    }
+
+    #chatInput:focus {
+      border-color: var(--accent);
+    }
+
+    #sendBtn {
+      padding: 0 18px;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+
+    #sendBtn:hover {
+      background: var(--accent-hover);
+    }
+
+    #sendBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <header class="chat-header">
+      <h1>Playses AI</h1>
+      <span class="chat-status" id="statusText">Siap</span>
+    </header>
+
+    <main id="chatBox" class="chat-box" aria-live="polite">
+      <div class="bubble bot">Halo! Ini Playses AI. Silakan ketik pesanmu di bawah.</div>
+    </main>
+
+    <form id="chatForm" class="chat-input-area">
+      <input
+        id="chatInput"
+        type="text"
+        placeholder="Ketik pesanmu"
+        autocomplete="off"
+        required
+      />
+      <button id="sendBtn" type="submit">Kirim</button>
+    </form>
+  </div>
+
+  <script>
+    // Isi dengan URL tunnel ke /chat dari Colab kamu, misal: "https://xxxx.ngrok-free.app/chat"
+    const BACKEND_API_URL = "";
+
+    // Samakan persis dengan API_KEY di server Flask Colab kamu
+    const API_KEY = "playses-ai-key-tetap";
+
+    const chatForm = document.getElementById("chatForm");
+    const chatInput = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const chatBox = document.getElementById("chatBox");
+    const statusText = document.getElementById("status
