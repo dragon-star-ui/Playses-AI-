@@ -1,5 +1,7 @@
 const BACKEND_API_URL = "https://regular-datebook-outburst.ngrok-free.dev/chat";
 const API_KEY = "playses-ai-key-tetap";
+const SERVER_UNAVAILABLE_MESSAGE =
+  "Sorry, there is a problem with the server or the server is down/not yet activated";
 
 const IDLE_LIMIT_MS = 5 * 60 * 1000; // 5 menit
 const STORAGE_MESSAGES_KEY = "playses_ai_messages_v1";
@@ -145,8 +147,10 @@ if (formEl && inpEl && btnEl && stEl && chatEl) {
     const loadingBubble = appendMessageDOM("...", "bot");
 
     if (!BACKEND_API_URL) {
-      if (loadingBubble) loadingBubble.textContent = "BACKEND_API_URL belum diisi.";
-      stEl.textContent = "Siap";
+      if (loadingBubble) loadingBubble.textContent = SERVER_UNAVAILABLE_MESSAGE;
+      messages.push({ text: SERVER_UNAVAILABLE_MESSAGE, cls: "bot" });
+      saveMessages();
+      stEl.textContent = "Error";
       inpEl.disabled = false;
       btnEl.disabled = false;
       inpEl.focus();
@@ -164,17 +168,26 @@ if (formEl && inpEl && btnEl && stEl && chatEl) {
         body: JSON.stringify({ message: val })
       });
 
+      if (!r.ok) {
+        if (loadingBubble) {
+          loadingBubble.textContent = SERVER_UNAVAILABLE_MESSAGE;
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
+        messages.push({ text: SERVER_UNAVAILABLE_MESSAGE, cls: "bot" });
+        saveMessages();
+        stEl.textContent = "Error";
+        return;
+      }
+
       const rawText = await r.text();
       let data = {};
       try {
         data = JSON.parse(rawText);
       } catch (_) {
-        data = { error: rawText || ("HTTP " + r.status) };
+        data = {};
       }
 
-      const replyText = !r.ok
-        ? (data.error || ("Server balas error HTTP " + r.status))
-        : (data.reply || data.error || JSON.stringify(data));
+      const replyText = data.reply || SERVER_UNAVAILABLE_MESSAGE;
 
       if (loadingBubble) {
         loadingBubble.textContent = replyText;
@@ -183,14 +196,13 @@ if (formEl && inpEl && btnEl && stEl && chatEl) {
 
       messages.push({ text: replyText, cls: "bot" });
       saveMessages();
-      stEl.textContent = !r.ok ? "Error" : "Siap";
-    } catch (err) {
-      const errText = "Gagal konek ke server: " + err.message;
+      stEl.textContent = "Siap";
+    } catch (_) {
       if (loadingBubble) {
-        loadingBubble.textContent = errText;
+        loadingBubble.textContent = SERVER_UNAVAILABLE_MESSAGE;
         chatEl.scrollTop = chatEl.scrollHeight;
       }
-      messages.push({ text: errText, cls: "bot" });
+      messages.push({ text: SERVER_UNAVAILABLE_MESSAGE, cls: "bot" });
       saveMessages();
       stEl.textContent = "Error";
     } finally {
