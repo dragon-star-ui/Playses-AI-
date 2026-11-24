@@ -37,7 +37,34 @@ function showToast(msg) {
   }, 2400);
 }
 
-// --- 1. Menu Samping (Burger Drawer via Event Delegation) ---
+function getShareMode() {
+  const mode = localStorage.getItem(STORAGE_SHARE_MODE_KEY);
+  return mode === "private" ? "private" : "public";
+}
+
+function setShareMode(mode) {
+  localStorage.setItem(STORAGE_SHARE_MODE_KEY, mode === "private" ? "private" : "public");
+}
+
+function initSettingPage() {
+  const radios = document.querySelectorAll('input[name="shareMode"]');
+  const savedMsgEl = document.getElementById("settingSavedMsg");
+  if (!radios.length) return;
+
+  const currentMode = getShareMode();
+  radios.forEach((radio) => {
+    radio.checked = radio.value === currentMode;
+    radio.addEventListener("change", () => {
+      if (radio.checked) {
+        setShareMode(radio.value);
+        if (savedMsgEl) {
+          savedMsgEl.textContent = `Saved: shared link mode is now ${radio.value}.`;
+        }
+        showToast(`Share mode: ${radio.value}`);
+      }
+    });
+  });
+}
 function setDrawerOpen(isOpen) {
   const drawerEl = document.getElementById("drawer");
   const backdropEl = document.getElementById("backdrop");
@@ -70,38 +97,6 @@ document.addEventListener("click", (e) => {
     setDrawerOpen(false);
   }
 });
-
-// --- 2. Mode Berbagi (Public / Private) di setting.html ---
-function getShareMode() {
-  const mode = localStorage.getItem(STORAGE_SHARE_MODE_KEY);
-  return mode === "private" ? "private" : "public";
-}
-
-function setShareMode(mode) {
-  localStorage.setItem(STORAGE_SHARE_MODE_KEY, mode === "private" ? "private" : "public");
-}
-
-function initSettingPage() {
-  const radios = document.querySelectorAll('input[name="shareMode"]');
-  const savedMsgEl = document.getElementById("settingSavedMsg");
-  if (!radios.length) return;
-
-  const currentMode = getShareMode();
-  radios.forEach((radio) => {
-    radio.checked = radio.value === currentMode;
-    radio.addEventListener("change", () => {
-      if (radio.checked) {
-        setShareMode(radio.value);
-        if (savedMsgEl) {
-          savedMsgEl.textContent = `Saved: shared link mode is now ${radio.value}.`;
-        }
-        showToast(`Share mode: ${radio.value}`);
-      }
-    });
-  });
-}
-
-// --- 3. Label Status ---
 const stEl = document.getElementById("st");
 const statusDotEl = document.getElementById("statusDot");
 
@@ -114,7 +109,6 @@ function setStatusLabel(label, dotMode) {
   }
 }
 
-// --- 4. State Riwayat Percakapan & Share URL ---
 const chatEl = document.getElementById("chat");
 const formEl = document.getElementById("f");
 const inpEl = document.getElementById("inp");
@@ -136,7 +130,6 @@ let selectedSessionIdForMenu = null;
 let selectedBotMessageText = "";
 let privateLinkBlocked = false;
 let cancelPendingLongPress = null;
-
 function generateRandomChatCode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let out = "";
@@ -212,7 +205,6 @@ function createNewSessionWithFirstMessage(userText) {
   updateUrlForSession(newSession);
   return newSession;
 }
-
 function setMessageBubbleContent(el, text) {
   if (!el) return;
   el.innerHTML = "";
@@ -245,7 +237,51 @@ function setMessageBubbleContent(el, text) {
   el.textContent = text;
 }
 
-// --- 5. Long Press Pesan Bot -> Copy ---
+function appendMessageDOM(text, cls) {
+  if (!chatEl) return null;
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  setMessageBubbleContent(d, text);
+  if (cls === "bot") {
+    d.dataset.fullText = text;
+    bindBotBubbleLongPress(d, () => d.dataset.fullText || d.textContent || "");
+  }
+  chatEl.appendChild(d);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return d;
+}
+
+function renderRandomDummyGreeting() {
+  if (!chatEl) return;
+  const greeting = DUMMY_GREETINGS[Math.floor(Math.random() * DUMMY_GREETINGS.length)];
+  const box = document.createElement("div");
+  box.className = "dummy-greeting";
+  box.textContent = greeting;
+  chatEl.appendChild(box);
+}
+
+function renderChatArea() {
+  if (!chatEl) return;
+  chatEl.innerHTML = "";
+
+  if (privateLinkBlocked) {
+    const notice = document.createElement("div");
+    notice.className = "system-msg";
+    notice.textContent = "This chat link is set to Private and cannot be opened.";
+    chatEl.appendChild(notice);
+    return;
+  }
+
+  const current = getActiveSession();
+  if (!current || !Array.isArray(current.messages) || current.messages.length === 0) {
+    renderRandomDummyGreeting();
+    return;
+  }
+
+  current.messages.forEach((m) => {
+    appendMessageDOM(m.text, m.cls);
+  });
+}
 async function copyToClipboard(text) {
   if (!text) return false;
   try {
@@ -358,54 +394,6 @@ function bindBotBubbleLongPress(el, getTextFn) {
     }
   });
 }
-
-function appendMessageDOM(text, cls) {
-  if (!chatEl) return null;
-  const d = document.createElement("div");
-  d.className = "msg " + cls;
-  setMessageBubbleContent(d, text);
-  if (cls === "bot") {
-    d.dataset.fullText = text;
-    bindBotBubbleLongPress(d, () => d.dataset.fullText || d.textContent || "");
-  }
-  chatEl.appendChild(d);
-  chatEl.scrollTop = chatEl.scrollHeight;
-  return d;
-}
-
-function renderRandomDummyGreeting() {
-  if (!chatEl) return;
-  const greeting = DUMMY_GREETINGS[Math.floor(Math.random() * DUMMY_GREETINGS.length)];
-  const box = document.createElement("div");
-  box.className = "dummy-greeting";
-  box.textContent = greeting;
-  chatEl.appendChild(box);
-}
-
-function renderChatArea() {
-  if (!chatEl) return;
-  chatEl.innerHTML = "";
-
-  if (privateLinkBlocked) {
-    const notice = document.createElement("div");
-    notice.className = "system-msg";
-    notice.textContent = "This chat link is set to Private and cannot be opened.";
-    chatEl.appendChild(notice);
-    return;
-  }
-
-  const current = getActiveSession();
-  if (!current || !Array.isArray(current.messages) || current.messages.length === 0) {
-    renderRandomDummyGreeting();
-    return;
-  }
-
-  current.messages.forEach((m) => {
-    appendMessageDOM(m.text, m.cls);
-  });
-}
-
-// --- 6. Menu Tekan Lama Riwayat (Rename, Share, Delete) ---
 function closeHistoryActionMenu() {
   selectedSessionIdForMenu = null;
   if (actionMenuEl) {
@@ -613,8 +601,6 @@ if (newChatBtn) {
     if (inpEl) inpEl.focus();
   });
 }
-
-// --- 7. Efek Mengetik (40ms) ---
 function typeReply(bubbleEl, fullText) {
   return new Promise((resolve) => {
     if (!bubbleEl) {
@@ -643,8 +629,6 @@ function typeReply(bubbleEl, fullText) {
     }, TYPEWRITER_DELAY_MS);
   });
 }
-
-// --- 8. Kirim Pesan ke Backend ---
 if (formEl && inpEl && btnEl && chatEl) {
   formEl.onsubmit = async function (e) {
     e.preventDefault();
@@ -686,4 +670,110 @@ if (formEl && inpEl && btnEl && chatEl) {
       const nextStep = THINKING_STEPS[stepIdx];
       if (loadingBubble) {
         loadingBubble.textContent = nextStep;
-        if (chatEl) chatEl.scrollTop = chatE
+        if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
+      }
+      if (stEl) stEl.textContent = nextStep;
+    }, 1100);
+
+    const stopThinking = () => {
+      clearInterval(thinkingTimer);
+    };
+
+    const showServerUnavailable = async () => {
+      stopThinking();
+      setStatusLabel("Offline", "offline");
+      if (loadingBubble) {
+        await typeReply(loadingBubble, SERVER_UNAVAILABLE_TEXT);
+      }
+      session.messages.push({ text: SERVER_UNAVAILABLE_TEXT, cls: "bot" });
+      saveSessions();
+    };
+
+    if (!BACKEND_API_URL) {
+      await showServerUnavailable();
+      inpEl.disabled = false;
+      btnEl.disabled = false;
+      inpEl.focus();
+      return;
+    }
+
+    try {
+      const r = await fetch(BACKEND_API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": API_KEY,
+          "ngrok-skip-browser-warning": "true"
+        },
+        body: JSON.stringify({
+          message: val,
+          history: recentHistory
+        })
+      });
+
+      if (!r.ok) {
+        await showServerUnavailable();
+        return;
+      }
+
+      const rawText = await r.text();
+      let data = {};
+      try {
+        data = JSON.parse(rawText);
+      } catch (_) {
+        data = {};
+      }
+
+      stopThinking();
+
+      if (!data.reply) {
+        await showServerUnavailable();
+        return;
+      }
+
+      setStatusLabel("Online", "online");
+      const replyText = String(data.reply);
+      if (loadingBubble) {
+        await typeReply(loadingBubble, replyText);
+      }
+
+      session.messages.push({ text: replyText, cls: "bot" });
+      saveSessions();
+    } catch (_) {
+      await showServerUnavailable();
+    } finally {
+      stopThinking();
+      inpEl.disabled = false;
+      btnEl.disabled = false;
+      inpEl.focus();
+    }
+  };
+      }
+initSettingPage();
+loadSessions();
+renderHistoryList();
+setStatusLabel("Ready", "online");
+
+if (chatEl) {
+  const params = new URLSearchParams(window.location.search);
+  const sharedCode = params.get("chat");
+
+  if (sharedCode) {
+    const matchedSession = sessions.find((s) => s.shareCode === sharedCode);
+    if (getShareMode() === "private") {
+      activeSessionId = null;
+      privateLinkBlocked = true;
+    } else if (matchedSession) {
+      activeSessionId = matchedSession.id;
+      privateLinkBlocked = false;
+    } else {
+      activeSessionId = null;
+      privateLinkBlocked = false;
+    }
+  } else {
+    activeSessionId = null;
+    privateLinkBlocked = false;
+  }
+
+  renderChatArea();
+}
