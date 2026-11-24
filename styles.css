@@ -60,6 +60,29 @@ body {
   background: #1e293b;
 }
 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #eab308;
+}
+
+.status-dot.online {
+  background: #22c55e;
+}
+
+.status-dot.offline {
+  background: #ef4444;
+}
+
 .chat {
   flex: 1;
   overflow-y: auto;
@@ -67,6 +90,19 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.dummy-greeting {
+  margin: auto;
+  max-width: 380px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  text-align: center;
+  color: #e2e8f0;
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .msg {
@@ -86,6 +122,22 @@ body {
   align-self: flex-start;
   background: #1e293b;
   border: 1px solid #334155;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+.system-msg {
+  align-self: center;
+  max-width: 90%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid #ef4444;
+  color: #fca5a5;
+  font-size: 13px;
+  text-align: center;
 }
 
 form {
@@ -241,7 +293,7 @@ button[type="submit"]:disabled {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding-bottom: 48px;
+  padding-bottom: 90px;
 }
 
 .history-empty {
@@ -280,41 +332,64 @@ button[type="submit"]:disabled {
   font-weight: 700;
 }
 
-.history-action-menu {
+.history-action-menu,
+.msg-action-menu {
   position: absolute;
-  right: 4px;
-  top: 0;
   display: none;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 130px;
   background: #1e293b;
   border: 1px solid #475569;
   border-radius: 8px;
-  padding: 4px;
+  padding: 5px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
   z-index: 40;
 }
 
-.history-action-menu.show {
+.history-action-menu {
+  right: 4px;
+  top: 0;
+}
+
+.msg-action-menu {
+  position: fixed;
+  z-index: 50;
+}
+
+.history-action-menu.show,
+.msg-action-menu.show {
+  display: flex;
+}
+
+.action-btn {
   display: block;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.action-btn:hover {
+  background: #334155;
 }
 
 .history-delete-btn {
-  display: block;
-  width: 100%;
-  padding: 6px 14px;
-  border: none;
-  border-radius: 6px;
   background: #dc2626;
   color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .history-delete-btn:hover {
   background: #b91c1c;
 }
 
-/* Halaman Deskripsi */
+/* Halaman Deskripsi & Setting */
 .desc-body {
   padding: 18px;
   overflow-y: auto;
@@ -340,4 +415,62 @@ button[type="submit"]:disabled {
   margin: 0;
   color: #cbd5e1;
   font-size: 14px;
-  }
+}
+
+.desc-link {
+  color: #60a5fa;
+  word-break: break-all;
+}
+
+.privacy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.privacy-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  cursor: pointer;
+}
+
+.privacy-option input {
+  flex: none;
+  margin-top: 3px;
+  cursor: pointer;
+}
+
+.setting-saved {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #4ade80;
+}
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  max-width: 90vw;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 60;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+    }
