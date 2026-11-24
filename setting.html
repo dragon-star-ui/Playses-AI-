@@ -72,6 +72,41 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script>
+    (function () {
+      const openBtn = document.getElementById("openDrawer");
+      const closeBtn = document.getElementById("closeDrawer");
+      const drawerEl = document.getElementById("drawer");
+      const backdropEl = document.getElementById("backdrop");
+
+      function toggleDrawer(forceOpen) {
+        if (!drawerEl || !backdropEl) return;
+        const next = typeof forceOpen === "boolean" ? forceOpen : !drawerEl.classList.contains("open");
+        drawerEl.classList.toggle("open", next);
+        backdropEl.classList.toggle("show", next);
+      }
+
+      if (openBtn) {
+        openBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleDrawer(true);
+        });
+      }
+      if (closeBtn) {
+        closeBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          toggleDrawer(false);
+        });
+      }
+      if (backdropEl) {
+        backdropEl.addEventListener("click", function () {
+          toggleDrawer(false);
+        });
+      }
+    })();
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
