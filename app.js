@@ -3,7 +3,7 @@ const API_KEY = "playses-ai-key-tetap";
 const DISCORD_INVITE_URL = "https://discord.gg/QxRSNFfU5B";
 const SHARE_BASE_URL = "https://dragon-star-ui.github.io/Playses-AI-/index.html";
 const SERVER_UNAVAILABLE_TEXT =
-  "Sorry, there is a problem with the server or the server is down/not yet activated. Please check the server status in our discord community";
+  "Sorry there is a problem with the server or the server is down/not yet activated. Please check the server status in our discord community";
 const PRIVATE_LINK_TEXT =
   "This chat link has been changed to private mode by the owner.";
 
