@@ -25,7 +25,6 @@ const STORAGE_SHARE_MODE_KEY = "playses_ai_share_mode_v1";
 const CONTEXT_MESSAGE_LIMIT = 6;
 const LONG_PRESS_DURATION_MS = 500;
 const TYPEWRITER_DELAY_MS = 40;
-const HEALTH_CHECK_TIMEOUT_MS = 1200;
 
 function showToast(msg) {
   const toastEl = document.getElementById("toast");
@@ -38,43 +37,39 @@ function showToast(msg) {
   }, 2400);
 }
 
-// --- 1. Menu Samping (Burger Drawer) - Dipasang paling awal agar selalu responsif ---
-const openDrawerBtn = document.getElementById("openDrawer");
-const closeDrawerBtn = document.getElementById("closeDrawer");
-const drawer = document.getElementById("drawer");
-const backdrop = document.getElementById("backdrop");
-
+// --- 1. Menu Samping (Burger Drawer via Event Delegation) ---
 function setDrawerOpen(isOpen) {
-  if (drawer) drawer.classList.toggle("open", isOpen);
-  if (backdrop) backdrop.classList.toggle("show", isOpen);
+  const drawerEl = document.getElementById("drawer");
+  const backdropEl = document.getElementById("backdrop");
+  if (drawerEl) drawerEl.classList.toggle("open", isOpen);
+  if (backdropEl) backdropEl.classList.toggle("show", isOpen);
   if (!isOpen) {
     closeHistoryActionMenu();
     closeMsgActionMenu();
   }
 }
 
-if (openDrawerBtn) {
-  openDrawerBtn.addEventListener("click", (e) => {
+document.addEventListener("click", (e) => {
+  const openBtn = e.target.closest("#openDrawer, .burger-btn");
+  if (openBtn) {
     e.preventDefault();
-    e.stopPropagation();
-    const currentlyOpen = drawer ? drawer.classList.contains("open") : false;
-    setDrawerOpen(!currentlyOpen);
-  });
-}
+    const drawerEl = document.getElementById("drawer");
+    const isCurrentlyOpen = drawerEl ? drawerEl.classList.contains("open") : false;
+    setDrawerOpen(!isCurrentlyOpen);
+    return;
+  }
 
-if (closeDrawerBtn) {
-  closeDrawerBtn.addEventListener("click", (e) => {
+  const closeBtn = e.target.closest("#closeDrawer, .close-btn");
+  if (closeBtn) {
     e.preventDefault();
-    e.stopPropagation();
     setDrawerOpen(false);
-  });
-}
+    return;
+  }
 
-if (backdrop) {
-  backdrop.addEventListener("click", () => {
+  if (e.target && e.target.id === "backdrop") {
     setDrawerOpen(false);
-  });
-}
+  }
+});
 
 // --- 2. Mode Berbagi (Public / Private) di setting.html ---
 function getShareMode() {
@@ -106,52 +101,16 @@ function initSettingPage() {
   });
 }
 
-// --- 3. Indikator Status Server ---
+// --- 3. Label Status ---
 const stEl = document.getElementById("st");
 const statusDotEl = document.getElementById("statusDot");
 
-function setServerStatus(mode, customLabel) {
-  if (stEl) {
-    if (customLabel) {
-      stEl.textContent = customLabel;
-    } else if (mode === "online") {
-      stEl.textContent = "Online";
-    } else if (mode === "offline") {
-      stEl.textContent = "Offline";
-    } else {
-      stEl.textContent = "Checking...";
-    }
-  }
+function setStatusLabel(label, dotMode) {
+  if (stEl) stEl.textContent = label;
   if (statusDotEl) {
     statusDotEl.classList.remove("online", "offline");
-    if (mode === "online") statusDotEl.classList.add("online");
-    else if (mode === "offline") statusDotEl.classList.add("offline");
-  }
-}
-
-async function checkServerStatus() {
-  if (!stEl && !statusDotEl) return;
-  if (!BACKEND_API_URL) {
-    setServerStatus("offline");
-    return;
-  }
-  setServerStatus("checking", "Checking...");
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
-  try {
-    const resp = await fetch(BACKEND_API_URL, {
-      method: "OPTIONS",
-      headers: {
-        "X-API-Key": API_KEY,
-        "ngrok-skip-browser-warning": "true"
-      },
-      signal: controller.signal
-    });
-    clearTimeout(timer);
-    setServerStatus(resp.status < 500 ? "online" : "offline");
-  } catch (_) {
-    clearTimeout(timer);
-    setServerStatus("offline");
+    if (dotMode === "online") statusDotEl.classList.add("online");
+    else if (dotMode === "offline") statusDotEl.classList.add("offline");
   }
 }
 
@@ -693,4 +652,38 @@ if (formEl && inpEl && btnEl && chatEl) {
     if (!val) return;
 
     closeHistoryActionMenu();
-    closeMsgA
+    closeMsgActionMenu();
+
+    let session = getActiveSession();
+    if (!session) {
+      session = createNewSessionWithFirstMessage(val);
+      renderHistoryList();
+    } else {
+      updateUrlForSession(session);
+    }
+
+    const recentHistory = session.messages
+      .slice(-CONTEXT_MESSAGE_LIMIT)
+      .map((m) => ({
+        role: m.cls === "user" ? "user" : "assistant",
+        content: m.text
+      }));
+
+    session.messages.push({ text: val, cls: "user" });
+    saveSessions();
+    appendMessageDOM(val, "user");
+
+    inpEl.value = "";
+    inpEl.disabled = true;
+    btnEl.disabled = true;
+    setStatusLabel("Thinking...", "online");
+
+    let stepIdx = 0;
+    const loadingBubble = appendMessageDOM(THINKING_STEPS[0], "bot");
+    if (loadingBubble) loadingBubble.dataset.fullText = "";
+    const thinkingTimer = setInterval(() => {
+      stepIdx = (stepIdx + 1) % THINKING_STEPS.length;
+      const nextStep = THINKING_STEPS[stepIdx];
+      if (loadingBubble) {
+        loadingBubble.textContent = nextStep;
+        if (chatEl) chatEl.scrollTop = chatE
