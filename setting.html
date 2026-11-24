@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Setting - Playses AI</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="backdrop" class="backdrop"></div>
+
+  <aside id="drawer" class="drawer" aria-label="Menu Navigasi">
+    <div class="drawer-top">
+      <strong>Menu Playses AI</strong>
+      <button id="closeDrawer" class="close-btn" type="button" aria-label="Tutup menu">✕</button>
+    </div>
+    <a class="nav-item" href="index.html">Chat</a>
+    <a class="nav-item" href="deskripsi.html">description</a>
+    <a class="nav-item active" href="setting.html">setting</a>
+
+    <div class="history-section">
+      <div class="history-header">
+        <span class="history-title">Chats</span>
+        <button id="newChatBtn" class="new-chat-btn" type="button">+ New</button>
+      </div>
+      <div id="historyList" class="history-list">
+        <div id="historyActionMenu" class="history-action-menu" aria-hidden="true">
+          <button id="renameHistoryBtn" class="action-btn" type="button">Rename</button>
+          <button id="shareHistoryBtn" class="action-btn" type="button">Share</button>
+          <button id="deleteHistoryBtn" class="action-btn history-delete-btn" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="box">
+    <div class="head">
+      <div class="head-left">
+        <button id="openDrawer" class="burger-btn" type="button" aria-label="Buka menu">☰</button>
+        <strong>Setting</strong>
+      </div>
+      <span>Privacy</span>
+    </div>
+
+    <div class="desc-body">
+      <div class="desc-card">
+        <h3>Shared Chat Link Access</h3>
+        <p>Choose whether shared chat links (<code>?chat=...</code>) can be opened when accessed.</p>
+
+        <div class="privacy-options">
+          <label class="privacy-option">
+            <input type="radio" name="shareMode" value="public" />
+            <div>
+              <strong>Public</strong>
+              <p>Shared chat links can be opened if the chat history still exists.</p>
+            </div>
+          </label>
+
+          <label class="privacy-option">
+            <input type="radio" name="shareMode" value="private" />
+            <div>
+              <strong>Private</strong>
+              <p>Links can still be shared, but opening them will be blocked.</p>
+            </div>
+          </label>
+        </div>
+
+        <div id="settingSavedMsg" class="setting-saved" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
