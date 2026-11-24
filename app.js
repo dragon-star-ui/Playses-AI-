@@ -25,6 +25,7 @@ const STORAGE_SHARE_MODE_KEY = "playses_ai_share_mode_v1";
 const CONTEXT_MESSAGE_LIMIT = 6;
 const LONG_PRESS_DURATION_MS = 500;
 const TYPEWRITER_DELAY_MS = 40;
+const HEALTH_CHECK_TIMEOUT_MS = 1200;
 
 function showToast(msg) {
   const toastEl = document.getElementById("toast");
@@ -37,7 +38,45 @@ function showToast(msg) {
   }, 2400);
 }
 
-// --- 0. Mode Berbagi (Public / Private) di setting.html ---
+// --- 1. Menu Samping (Burger Drawer) - Dipasang paling awal agar selalu responsif ---
+const openDrawerBtn = document.getElementById("openDrawer");
+const closeDrawerBtn = document.getElementById("closeDrawer");
+const drawer = document.getElementById("drawer");
+const backdrop = document.getElementById("backdrop");
+
+function setDrawerOpen(isOpen) {
+  if (drawer) drawer.classList.toggle("open", isOpen);
+  if (backdrop) backdrop.classList.toggle("show", isOpen);
+  if (!isOpen) {
+    closeHistoryActionMenu();
+    closeMsgActionMenu();
+  }
+}
+
+if (openDrawerBtn) {
+  openDrawerBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const currentlyOpen = drawer ? drawer.classList.contains("open") : false;
+    setDrawerOpen(!currentlyOpen);
+  });
+}
+
+if (closeDrawerBtn) {
+  closeDrawerBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDrawerOpen(false);
+  });
+}
+
+if (backdrop) {
+  backdrop.addEventListener("click", () => {
+    setDrawerOpen(false);
+  });
+}
+
+// --- 2. Mode Berbagi (Public / Private) di setting.html ---
 function getShareMode() {
   const mode = localStorage.getItem(STORAGE_SHARE_MODE_KEY);
   return mode === "private" ? "private" : "public";
@@ -67,33 +106,7 @@ function initSettingPage() {
   });
 }
 
-// --- 1. Menu Samping (Burger Drawer) ---
-const openDrawerBtn = document.getElementById("openDrawer");
-const closeDrawerBtn = document.getElementById("closeDrawer");
-const drawer = document.getElementById("drawer");
-const backdrop = document.getElementById("backdrop");
-
-function setDrawerOpen(isOpen) {
-  if (!drawer || !backdrop) return;
-  drawer.classList.toggle("open", isOpen);
-  backdrop.classList.toggle("show", isOpen);
-  if (!isOpen) {
-    closeHistoryActionMenu();
-    closeMsgActionMenu();
-  }
-}
-
-if (openDrawerBtn) {
-  openDrawerBtn.addEventListener("click", () => setDrawerOpen(true));
-}
-if (closeDrawerBtn) {
-  closeDrawerBtn.addEventListener("click", () => setDrawerOpen(false));
-}
-if (backdrop) {
-  backdrop.addEventListener("click", () => setDrawerOpen(false));
-}
-
-// --- 2. Indikator Status Server ---
+// --- 3. Indikator Status Server ---
 const stEl = document.getElementById("st");
 const statusDotEl = document.getElementById("statusDot");
 
@@ -122,9 +135,10 @@ async function checkServerStatus() {
     setServerStatus("offline");
     return;
   }
+  setServerStatus("checking", "Checking...");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
     const resp = await fetch(BACKEND_API_URL, {
       method: "OPTIONS",
       headers: {
@@ -136,11 +150,12 @@ async function checkServerStatus() {
     clearTimeout(timer);
     setServerStatus(resp.status < 500 ? "online" : "offline");
   } catch (_) {
+    clearTimeout(timer);
     setServerStatus("offline");
   }
 }
 
-// --- 3. State Riwayat Percakapan & Share URL ---
+// --- 4. State Riwayat Percakapan & Share URL ---
 const chatEl = document.getElementById("chat");
 const formEl = document.getElementById("f");
 const inpEl = document.getElementById("inp");
@@ -161,6 +176,7 @@ let activeSessionId = null;
 let selectedSessionIdForMenu = null;
 let selectedBotMessageText = "";
 let privateLinkBlocked = false;
+let cancelPendingLongPress = null;
 
 function generateRandomChatCode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -270,7 +286,7 @@ function setMessageBubbleContent(el, text) {
   el.textContent = text;
 }
 
-// --- 4. Long Press Pesan Bot -> Copy ---
+// --- 5. Long Press Pesan Bot -> Copy ---
 async function copyToClipboard(text) {
   if (!text) return false;
   try {
@@ -325,9 +341,11 @@ function openMsgActionMenu(text, x, y, anchorEl) {
 }
 
 if (copyMsgBtn) {
-  copyMsgBtn.addEventListener("click", async () => {
-    const ok = await copyToClipboard(selectedBotMessageText);
+  copyMsgBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const textToCopy = selectedBotMessageText;
     closeMsgActionMenu();
+    const ok = await copyToClipboard(textToCopy);
     showToast(ok ? "Copied" : "Copy failed");
   });
 }
@@ -336,8 +354,6 @@ function bindBotBubbleLongPress(el, getTextFn) {
   let timer = null;
   let startX = 0;
   let startY = 0;
-  let lastX = 0;
-  let lastY = 0;
 
   const clearTimer = () => {
     if (timer !== null) {
@@ -346,21 +362,27 @@ function bindBotBubbleLongPress(el, getTextFn) {
     }
   };
 
+  cancelPendingLongPress = clearTimer;
+
   el.addEventListener("pointerdown", (e) => {
+    if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse") return;
     startX = e.clientX;
     startY = e.clientY;
-    lastX = e.clientX;
-    lastY = e.clientY;
+    const xAtDown = e.clientX;
+    const yAtDown = e.clientY;
     clearTimer();
     timer = setTimeout(() => {
-      openMsgActionMenu(getTextFn(), lastX, lastY, el);
+      timer = null;
+      const currentText = getTextFn();
+      if (currentText) {
+        openMsgActionMenu(currentText, xAtDown, yAtDown, el);
+      }
     }, LONG_PRESS_DURATION_MS);
   });
 
   el.addEventListener("pointermove", (e) => {
-    lastX = e.clientX;
-    lastY = e.clientY;
-    if (timer !== null && (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) {
+    if (timer === null) return;
+    if (Math.abs(e.clientX - startX) > 6 || Math.abs(e.clientY - startY) > 6) {
       clearTimer();
     }
   });
@@ -371,7 +393,10 @@ function bindBotBubbleLongPress(el, getTextFn) {
   el.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     clearTimer();
-    openMsgActionMenu(getTextFn(), e.clientX, e.clientY, el);
+    const currentText = getTextFn();
+    if (currentText) {
+      openMsgActionMenu(currentText, e.clientX, e.clientY, el);
+    }
   });
 }
 
@@ -381,7 +406,8 @@ function appendMessageDOM(text, cls) {
   d.className = "msg " + cls;
   setMessageBubbleContent(d, text);
   if (cls === "bot") {
-    bindBotBubbleLongPress(d, () => d.textContent || "");
+    d.dataset.fullText = text;
+    bindBotBubbleLongPress(d, () => d.dataset.fullText || d.textContent || "");
   }
   chatEl.appendChild(d);
   chatEl.scrollTop = chatEl.scrollHeight;
@@ -420,7 +446,7 @@ function renderChatArea() {
   });
 }
 
-// --- 5. Menu Tekan Lama Riwayat (Rename, Share, Delete) ---
+// --- 6. Menu Tekan Lama Riwayat (Rename, Share, Delete) ---
 function closeHistoryActionMenu() {
   selectedSessionIdForMenu = null;
   if (actionMenuEl) {
@@ -521,6 +547,13 @@ document.addEventListener("pointerdown", (e) => {
   }
 });
 
+if (chatEl) {
+  chatEl.addEventListener("scroll", () => {
+    if (typeof cancelPendingLongPress === "function") cancelPendingLongPress();
+    closeMsgActionMenu();
+  });
+}
+
 function renderHistoryList() {
   if (!historyListEl) return;
   closeHistoryActionMenu();
@@ -571,7 +604,7 @@ function renderHistoryList() {
 
     itemBtn.addEventListener("pointermove", (e) => {
       if (pressTimer === null) return;
-      if (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10) {
+      if (Math.abs(e.clientX - startX) > 6 || Math.abs(e.clientY - startY) > 6) {
         clearPressTimer();
       }
     });
@@ -622,13 +655,14 @@ if (newChatBtn) {
   });
 }
 
-// --- 6. Efek Mengetik (40ms) ---
+// --- 7. Efek Mengetik (40ms) ---
 function typeReply(bubbleEl, fullText) {
   return new Promise((resolve) => {
     if (!bubbleEl) {
       resolve();
       return;
     }
+    bubbleEl.dataset.fullText = fullText;
     bubbleEl.textContent = "";
     const chars = Array.from(fullText);
     let i = 0;
@@ -641,7 +675,9 @@ function typeReply(bubbleEl, fullText) {
       } else {
         clearInterval(interval);
         setMessageBubbleContent(bubbleEl, fullText);
-        bindBotBubbleLongPress(bubbleEl, () => fullText);
+        if (msgActionMenuEl && msgActionMenuEl.classList.contains("show")) {
+          selectedBotMessageText = fullText;
+        }
         if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
         resolve();
       }
@@ -649,7 +685,7 @@ function typeReply(bubbleEl, fullText) {
   });
 }
 
-// --- 7. Kirim Pesan ke Backend ---
+// --- 8. Kirim Pesan ke Backend ---
 if (formEl && inpEl && btnEl && chatEl) {
   formEl.onsubmit = async function (e) {
     e.preventDefault();
@@ -657,39 +693,4 @@ if (formEl && inpEl && btnEl && chatEl) {
     if (!val) return;
 
     closeHistoryActionMenu();
-    closeMsgActionMenu();
-
-    let session = getActiveSession();
-    if (!session) {
-      session = createNewSessionWithFirstMessage(val);
-      renderHistoryList();
-    } else {
-      updateUrlForSession(session);
-    }
-
-    const recentHistory = session.messages
-      .slice(-CONTEXT_MESSAGE_LIMIT)
-      .map((m) => ({
-        role: m.cls === "user" ? "user" : "assistant",
-        content: m.text
-      }));
-
-    session.messages.push({ text: val, cls: "user" });
-    saveSessions();
-    appendMessageDOM(val, "user");
-
-    inpEl.value = "";
-    inpEl.disabled = true;
-    btnEl.disabled = true;
-    setServerStatus("online", "Thinking...");
-
-    let stepIdx = 0;
-    const loadingBubble = appendMessageDOM(THINKING_STEPS[0], "bot");
-    const thinkingTimer = setInterval(() => {
-      stepIdx = (stepIdx + 1) % THINKING_STEPS.length;
-      const nextStep = THINKING_STEPS[stepIdx];
-      if (loadingBubble) {
-        loadingBubble.textContent = nextStep;
-        if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
-      }
-      if (stEl) stEl.textContent = nextS
+    closeMsgA
