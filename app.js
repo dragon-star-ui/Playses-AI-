@@ -4,6 +4,8 @@ const DISCORD_INVITE_URL = "https://discord.gg/QxRSNFfU5B";
 const SHARE_BASE_URL = "https://dragon-star-ui.github.io/Playses-AI-/index.html";
 const SERVER_UNAVAILABLE_TEXT =
   "Sorry, there is a problem with the server or the server is down/not yet activated. Please check the server status in our discord community";
+const PRIVATE_LINK_TEXT =
+  "This chat link has been changed to private mode by the owner.";
 
 const THINKING_STEPS = [
   "Thinking...",
@@ -148,6 +150,54 @@ function generateRandomChatCode() {
   return out;
 }
 
+function encodeSessionToBase64(sessionObj) {
+  const payload = {
+    t: sessionObj.title || "New Chat",
+    m: Array.isArray(sessionObj.messages)
+      ? sessionObj.messages.map((item) => ({
+          cls: item.cls === "user" ? "user" : "bot",
+          text: String(item.text || "")
+        }))
+      : []
+  };
+  const jsonStr = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(jsonStr);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decodeSessionFromBase64(encodedStr) {
+  if (!encodedStr) return null;
+  try {
+    let base64 = encodedStr.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const jsonStr = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(jsonStr);
+    if (!parsed || !Array.isArray(parsed.m)) return null;
+    return {
+      title: typeof parsed.t === "string" && parsed.t.trim() ? parsed.t.trim() : "Shared Chat",
+      messages: parsed.m
+        .filter((item) => item && typeof item.text === "string")
+        .map((item) => ({
+          cls: item.cls === "user" ? "user" : "bot",
+          text: item.text
+        }))
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 function loadSessions() {
   try {
     const raw = localStorage.getItem(STORAGE_SESSIONS_KEY);
@@ -183,7 +233,8 @@ function getActiveSession() {
 }
 
 function buildShareUrl(session) {
-  return `${SHARE_BASE_URL}?chat=${encodeURIComponent(session.shareCode)}`;
+  const encoded = encodeSessionToBase64(session);
+  return `${SHARE_BASE_URL}?s=${encodeURIComponent(encoded)}`;
 }
 
 function updateUrlForSession(session) {
@@ -194,6 +245,7 @@ function updateUrlForSession(session) {
       url.searchParams.set("chat", session.shareCode);
     } else {
       url.searchParams.delete("chat");
+      url.searchParams.delete("s");
     }
     window.history.replaceState({}, "", url.toString());
   } catch (_) {}
@@ -383,15 +435,29 @@ function renderRandomDummyGreeting() {
   chatEl.appendChild(box);
 }
 
+function renderPrivateBlackScreen() {
+  if (!chatEl) return;
+  document.body.style.background = "#000000";
+  chatEl.style.background = "#000000";
+  chatEl.innerHTML = "";
+
+  const box = document.createElement("div");
+  box.style.margin = "auto";
+  box.style.padding = "18px";
+  box.style.color = "#f8fafc";
+  box.style.textAlign = "center";
+  box.style.fontSize = "14px";
+  box.textContent = PRIVATE_LINK_TEXT;
+
+  chatEl.appendChild(box);
+}
+
 function renderChatArea() {
   if (!chatEl) return;
   chatEl.innerHTML = "";
 
   if (privateLinkBlocked) {
-    const notice = document.createElement("div");
-    notice.className = "system-msg";
-    notice.textContent = "This chat link is set to Private and cannot be opened.";
-    chatEl.appendChild(notice);
+    renderPrivateBlackScreen();
     return;
   }
 
@@ -448,14 +514,17 @@ function renameSessionById(sessionId) {
 async function shareSessionById(sessionId) {
   const sess = sessions.find((s) => s.id === sessionId);
   if (!sess) return;
-  if (!sess.shareCode) {
-    sess.shareCode = generateRandomChatCode();
-    saveSessions();
+
+  if (getShareMode() === "private") {
+    closeHistoryActionMenu();
+    showToast("Share mode is Private. Change to Public in Setting first.");
+    return;
   }
+
   const shareUrl = buildShareUrl(sess);
   const copied = await copyToClipboard(shareUrl);
   closeHistoryActionMenu();
-  showToast(copied ? `Share link copied: ${shareUrl}` : shareUrl);
+  showToast(copied ? "Share link copied!" : shareUrl);
 }
 
 function deleteSessionById(sessionId) {
@@ -626,23 +695,7 @@ function typeReply(bubbleEl, fullText) {
     let i = 0;
 
     const interval = setInterval(() => {
-      if (i < chars.length) {
-        bubbleEl.textContent += chars[i];
-        i += 1;
-        if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
-      } else {
-        clearInterval(interval);
-        setMessageBubbleContent(bubbleEl, fullText);
-        if (msgActionMenuEl && msgActionMenuEl.classList.contains("show")) {
-          selectedBotMessageText = fullText;
-        }
-        if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
-        resolve();
-      }
-    }, TYPEWRITER_DELAY_MS);
-  });
-        }
-                             if (formEl && inpEl && btnEl && chatEl) {
+   if (formEl && inpEl && btnEl && chatEl) {
   formEl.onsubmit = async function (e) {
     e.preventDefault();
     const val = inpEl.value.trim();
@@ -770,10 +823,38 @@ setStatusLabel("Ready", "online");
 
 if (chatEl) {
   const params = new URLSearchParams(window.location.search);
-  const sharedCode = params.get("chat");
+  const sharedPayload = params.get("s");
+  const legacyCode = params.get("chat");
 
-  if (sharedCode) {
-    const matchedSession = sessions.find((s) => s.shareCode === sharedCode);
+  if (sharedPayload) {
+    if (getShareMode() === "private") {
+      activeSessionId = null;
+      privateLinkBlocked = true;
+      renderPrivateBlackScreen();
+    } else {
+      const decoded = decodeSessionFromBase64(sharedPayload);
+      if (decoded) {
+        activeSessionId = null;
+        privateLinkBlocked = false;
+        chatEl.innerHTML = "";
+
+        const banner = document.createElement("div");
+        banner.className = "system-msg";
+        banner.textContent = `Shared Chat: ${decoded.title}`;
+        chatEl.appendChild(banner);
+
+        decoded.messages.forEach((m) => {
+          appendMessageDOM(m.text, m.cls);
+        });
+      } else {
+        activeSessionId = null;
+        privateLinkBlocked = false;
+        renderChatArea();
+        showToast("Invalid or corrupted share link.");
+      }
+    }
+  } else if (legacyCode) {
+    const matchedSession = sessions.find((s) => s.shareCode === legacyCode);
     if (getShareMode() === "private") {
       activeSessionId = null;
       privateLinkBlocked = true;
@@ -784,10 +865,11 @@ if (chatEl) {
       activeSessionId = null;
       privateLinkBlocked = false;
     }
+    renderChatArea();
   } else {
     activeSessionId = null;
     privateLinkBlocked = false;
+    renderChatArea();
   }
-
-  renderChatArea();
 }
+      
