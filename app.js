@@ -1,7 +1,15 @@
 const BACKEND_API_URL = "https://regular-datebook-outburst.ngrok-free.dev/chat";
 const API_KEY = "playses-ai-key-tetap";
-const SERVER_UNAVAILABLE_MESSAGE =
-  "Sorry, there is a problem with the server or the server is down/not yet activated";
+const DISCORD_INVITE_URL = "https://discord.gg/QxRSNFfU5B";
+const SERVER_UNAVAILABLE_TEXT =
+  "Sorry, there is a problem with the server or the server is down/not yet activated. Please check the server status in our discord community";
+
+const THINKING_STEPS = [
+  "Thinking...",
+  "Reading your message...",
+  "Running LSTM inference...",
+  "Crafting the reply..."
+];
 
 const STORAGE_SESSIONS_KEY = "playses_ai_sessions_v1";
 const CONTEXT_MESSAGE_LIMIT = 6; // Jumlah pesan terakhir yang dikirim sebagai konteks
@@ -91,11 +99,43 @@ function createNewSessionWithFirstMessage(userText) {
   return newSession;
 }
 
+function setMessageBubbleContent(el, text) {
+  if (!el) return;
+  el.innerHTML = "";
+
+  const marker = "discord community";
+  const markerIdx = text.indexOf(marker);
+
+  if (text.startsWith("Sorry, there is a problem with the server") && markerIdx !== -1) {
+    const beforeAndMarker = text.slice(0, markerIdx + marker.length);
+    const afterMarker = text.slice(markerIdx + marker.length);
+
+    el.appendChild(document.createTextNode(beforeAndMarker + " "));
+
+    const linkEl = document.createElement("a");
+    linkEl.href = DISCORD_INVITE_URL;
+    linkEl.textContent = DISCORD_INVITE_URL;
+    linkEl.target = "_blank";
+    linkEl.rel = "noopener noreferrer";
+    linkEl.style.color = "#6ea8fe";
+    linkEl.style.textDecoration = "underline";
+    linkEl.style.wordBreak = "break-all";
+    el.appendChild(linkEl);
+
+    if (afterMarker) {
+      el.appendChild(document.createTextNode(afterMarker));
+    }
+    return;
+  }
+
+  el.textContent = text;
+}
+
 function appendMessageDOM(text, cls) {
   if (!chatEl) return null;
   const d = document.createElement("div");
   d.className = "msg " + cls;
-  d.textContent = text;
+  setMessageBubbleContent(d, text);
   chatEl.appendChild(d);
   chatEl.scrollTop = chatEl.scrollHeight;
   return d;
@@ -176,7 +216,6 @@ function renderHistoryList() {
   if (!historyListEl) return;
   closeLongPressMenu();
 
-  // Kosongkan item lama kecuali menu aksi jika berada di dalam historyListEl
   const existingItems = historyListEl.querySelectorAll(".history-item");
   existingItems.forEach((el) => el.remove());
 
@@ -311,14 +350,37 @@ if (formEl && inpEl && btnEl && stEl && chatEl) {
     inpEl.value = "";
     inpEl.disabled = true;
     btnEl.disabled = true;
-    stEl.textContent = "thinking...";
-    const loadingBubble = appendMessageDOM("...", "bot");
+    stEl.textContent = "Thinking...";
+
+    let stepIdx = 0;
+    const loadingBubble = appendMessageDOM(THINKING_STEPS[0], "bot");
+    const thinkingTimer = setInterval(() => {
+      stepIdx = (stepIdx + 1) % THINKING_STEPS.length;
+      const nextStep = THINKING_STEPS[stepIdx];
+      if (loadingBubble) {
+        loadingBubble.textContent = nextStep;
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+      stEl.textContent = nextStep;
+    }, 1100);
+
+    const stopThinkingAnimation = () => {
+      clearInterval(thinkingTimer);
+    };
+
+    const showServerUnavailable = () => {
+      stopThinkingAnimation();
+      if (loadingBubble) {
+        setMessageBubbleContent(loadingBubble, SERVER_UNAVAILABLE_TEXT);
+        chatEl.scrollTop = chatEl.scrollHeight;
+      }
+      session.messages.push({ text: SERVER_UNAVAILABLE_TEXT, cls: "bot" });
+      saveSessions();
+      stEl.textContent = "Offline";
+    };
 
     if (!BACKEND_API_URL) {
-      if (loadingBubble) loadingBubble.textContent = SERVER_UNAVAILABLE_MESSAGE;
-      session.messages.push({ text: SERVER_UNAVAILABLE_MESSAGE, cls: "bot" });
-      saveSessions();
-      stEl.textContent = "Error";
+      showServerUnavailable();
       inpEl.disabled = false;
       btnEl.disabled = false;
       inpEl.focus();
@@ -340,13 +402,7 @@ if (formEl && inpEl && btnEl && stEl && chatEl) {
       });
 
       if (!r.ok) {
-        if (loadingBubble) {
-          loadingBubble.textContent = SERVER_UNAVAILABLE_MESSAGE;
-          chatEl.scrollTop = chatEl.scrollHeight;
-        }
-        session.messages.push({ text: SERVER_UNAVAILABLE_MESSAGE, cls: "bot" });
-        saveSessions();
-        stEl.textContent = "Error";
+        showServerUnavailable();
         return;
       }
 
@@ -358,28 +414,30 @@ if (formEl && inpEl && btnEl && stEl && chatEl) {
         data = {};
       }
 
-      const replyText = data.reply || SERVER_UNAVAILABLE_MESSAGE;
+      stopThinkingAnimation();
 
+      if (!data.reply) {
+        showServerUnavailable();
+        return;
+      }
+
+      const replyText = String(data.reply);
       if (loadingBubble) {
-        loadingBubble.textContent = replyText;
+        setMessageBubbleContent(loadingBubble, replyText);
         chatEl.scrollTop = chatEl.scrollHeight;
       }
 
       session.messages.push({ text: replyText, cls: "bot" });
       saveSessions();
-      stEl.textContent = "Siap";
+      stEl.textContent = "Ready";
     } catch (_) {
-      if (loadingBubble) {
-        loadingBubble.textContent = SERVER_UNAVAILABLE_MESSAGE;
-        chatEl.scrollTop = chatEl.scrollHeight;
-      }
-      session.messages.push({ text: SERVER_UNAVAILABLE_MESSAGE, cls: "bot" });
-      saveSessions();
-      stEl.textContent = "Error";
+      showServerUnavailable();
     } finally {
+      stopThinkingAnimation();
       inpEl.disabled = false;
       btnEl.disabled = false;
       inpEl.focus();
     }
   };
-}
+    }
+      
