@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Deskripsi Website - Playses AI</title>
+  <title>Description- Playses AI</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -16,6 +16,7 @@
     </div>
     <a class="nav-item" href="index.html">Chat</a>
     <a class="nav-item active" href="deskripsi.html">description</a>
+    <a class="nav-item" href="setting.html">setting</a>
 
     <div class="history-section">
       <div class="history-header">
@@ -24,7 +25,9 @@
       </div>
       <div id="historyList" class="history-list">
         <div id="historyActionMenu" class="history-action-menu" aria-hidden="true">
-          <button id="deleteHistoryBtn" class="history-delete-btn" type="button">Delete</button>
+          <button id="renameHistoryBtn" class="action-btn" type="button">Rename</button>
+          <button id="shareHistoryBtn" class="action-btn" type="button">Share</button>
+          <button id="deleteHistoryBtn" class="action-btn history-delete-btn" type="button">Delete</button>
         </div>
       </div>
     </div>
@@ -41,21 +44,23 @@
 
     <div class="desc-body">
       <div class="desc-card">
-        <h3>the country of origin of the creator of this web and AI </h3>
+        <h3>the country of origin of the creator of this web and AI</h3>
         <p>This website was created by a small studio from Indonesia in 2026 and this studio was created by an 11 year old child in 2026, even though in that year our studio only had 2 people we can still make this web and AI even though this year our AI is still a small model</p>
       </div>
 
       <div class="desc-card">
         <h3>studio name</h3>
-        <p>This studio was created on June 6, 2026 with an 11 year old child and his friend that year and the name of this studio is Playses Studio™ </p>
+        <p>This studio was created on June 6, 2026 with an 11 year old child and his friend that year and the name of this studio is Playses Studio™</p>
       </div>
 
       <div class="desc-card">
-        <h3>discord community </h3>
+        <h3>discord community</h3>
         <p><a class="desc-link" href="https://discord.gg/QxRSNFfU5B" target="_blank" rel="noopener noreferrer">https://discord.gg/QxRSNFfU5B</a></p>
       </div>
     </div>
   </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>
