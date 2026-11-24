@@ -16,6 +16,7 @@
     </div>
     <a class="nav-item active" href="index.html">Chat</a>
     <a class="nav-item" href="deskripsi.html">description</a>
+    <a class="nav-item" href="setting.html">setting</a>
 
     <div class="history-section">
       <div class="history-header">
@@ -24,7 +25,9 @@
       </div>
       <div id="historyList" class="history-list">
         <div id="historyActionMenu" class="history-action-menu" aria-hidden="true">
-          <button id="deleteHistoryBtn" class="history-delete-btn" type="button">Delete</button>
+          <button id="renameHistoryBtn" class="action-btn" type="button">Rename</button>
+          <button id="shareHistoryBtn" class="action-btn" type="button">Share</button>
+          <button id="deleteHistoryBtn" class="action-btn history-delete-btn" type="button">Delete</button>
         </div>
       </div>
     </div>
@@ -36,16 +39,25 @@
         <button id="openDrawer" class="burger-btn" type="button" aria-label="Buka menu">☰</button>
         <strong>Playses AI</strong>
       </div>
-      <span id="st">Siap</span>
+      <div class="status-badge">
+        <span id="statusDot" class="status-dot" aria-hidden="true"></span>
+        <span id="st">Checking...</span>
+      </div>
     </div>
 
     <div id="chat" class="chat"></div>
+
+    <div id="msgActionMenu" class="msg-action-menu" aria-hidden="true">
+      <button id="copyMsgBtn" class="action-btn" type="button">Copy</button>
+    </div>
 
     <form id="f">
       <input id="inp" type="text" placeholder="Ketik pesanmu" autocomplete="off" required />
       <button id="btn" type="submit">Kirim</button>
     </form>
   </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="app.js"></script>
 </body>
