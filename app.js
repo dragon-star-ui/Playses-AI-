@@ -37,6 +37,24 @@ function showToast(msg) {
   }, 2400);
 }
 
+window.addEventListener("error", (event) => {
+  showToast("JS Error: " + (event.message || "unknown error"));
+});
+
+const stEl = document.getElementById("st");
+const statusDotEl = document.getElementById("statusDot");
+
+function setStatusLabel(label, dotMode) {
+  if (stEl) stEl.textContent = label;
+  if (statusDotEl) {
+    statusDotEl.classList.remove("online", "offline");
+    if (dotMode === "online") statusDotEl.classList.add("online");
+    else if (dotMode === "offline") statusDotEl.classList.add("offline");
+  }
+}
+
+setStatusLabel("Ready", "online");
+
 function getShareMode() {
   const mode = localStorage.getItem(STORAGE_SHARE_MODE_KEY);
   return mode === "private" ? "private" : "public";
@@ -65,6 +83,7 @@ function initSettingPage() {
     });
   });
 }
+
 function setDrawerOpen(isOpen) {
   const drawerEl = document.getElementById("drawer");
   const backdropEl = document.getElementById("backdrop");
@@ -97,17 +116,6 @@ document.addEventListener("click", (e) => {
     setDrawerOpen(false);
   }
 });
-const stEl = document.getElementById("st");
-const statusDotEl = document.getElementById("statusDot");
-
-function setStatusLabel(label, dotMode) {
-  if (stEl) stEl.textContent = label;
-  if (statusDotEl) {
-    statusDotEl.classList.remove("online", "offline");
-    if (dotMode === "online") statusDotEl.classList.add("online");
-    else if (dotMode === "offline") statusDotEl.classList.add("offline");
-  }
-}
 
 const chatEl = document.getElementById("chat");
 const formEl = document.getElementById("f");
@@ -130,6 +138,7 @@ let selectedSessionIdForMenu = null;
 let selectedBotMessageText = "";
 let privateLinkBlocked = false;
 let cancelPendingLongPress = null;
+
 function generateRandomChatCode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let out = "";
@@ -205,6 +214,7 @@ function createNewSessionWithFirstMessage(userText) {
   updateUrlForSession(newSession);
   return newSession;
 }
+
 function setMessageBubbleContent(el, text) {
   if (!el) return;
   el.innerHTML = "";
@@ -237,51 +247,6 @@ function setMessageBubbleContent(el, text) {
   el.textContent = text;
 }
 
-function appendMessageDOM(text, cls) {
-  if (!chatEl) return null;
-  const d = document.createElement("div");
-  d.className = "msg " + cls;
-  setMessageBubbleContent(d, text);
-  if (cls === "bot") {
-    d.dataset.fullText = text;
-    bindBotBubbleLongPress(d, () => d.dataset.fullText || d.textContent || "");
-  }
-  chatEl.appendChild(d);
-  chatEl.scrollTop = chatEl.scrollHeight;
-  return d;
-}
-
-function renderRandomDummyGreeting() {
-  if (!chatEl) return;
-  const greeting = DUMMY_GREETINGS[Math.floor(Math.random() * DUMMY_GREETINGS.length)];
-  const box = document.createElement("div");
-  box.className = "dummy-greeting";
-  box.textContent = greeting;
-  chatEl.appendChild(box);
-}
-
-function renderChatArea() {
-  if (!chatEl) return;
-  chatEl.innerHTML = "";
-
-  if (privateLinkBlocked) {
-    const notice = document.createElement("div");
-    notice.className = "system-msg";
-    notice.textContent = "This chat link is set to Private and cannot be opened.";
-    chatEl.appendChild(notice);
-    return;
-  }
-
-  const current = getActiveSession();
-  if (!current || !Array.isArray(current.messages) || current.messages.length === 0) {
-    renderRandomDummyGreeting();
-    return;
-  }
-
-  current.messages.forEach((m) => {
-    appendMessageDOM(m.text, m.cls);
-  });
-}
 async function copyToClipboard(text) {
   if (!text) return false;
   try {
@@ -394,6 +359,53 @@ function bindBotBubbleLongPress(el, getTextFn) {
     }
   });
 }
+
+function appendMessageDOM(text, cls) {
+  if (!chatEl) return null;
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  setMessageBubbleContent(d, text);
+  if (cls === "bot") {
+    d.dataset.fullText = text;
+    bindBotBubbleLongPress(d, () => d.dataset.fullText || d.textContent || "");
+  }
+  chatEl.appendChild(d);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return d;
+}
+
+function renderRandomDummyGreeting() {
+  if (!chatEl) return;
+  const greeting = DUMMY_GREETINGS[Math.floor(Math.random() * DUMMY_GREETINGS.length)];
+  const box = document.createElement("div");
+  box.className = "dummy-greeting";
+  box.textContent = greeting;
+  chatEl.appendChild(box);
+}
+
+function renderChatArea() {
+  if (!chatEl) return;
+  chatEl.innerHTML = "";
+
+  if (privateLinkBlocked) {
+    const notice = document.createElement("div");
+    notice.className = "system-msg";
+    notice.textContent = "This chat link is set to Private and cannot be opened.";
+    chatEl.appendChild(notice);
+    return;
+  }
+
+  const current = getActiveSession();
+  if (!current || !Array.isArray(current.messages) || current.messages.length === 0) {
+    renderRandomDummyGreeting();
+    return;
+  }
+
+  current.messages.forEach((m) => {
+    appendMessageDOM(m.text, m.cls);
+  });
+}
+
 function closeHistoryActionMenu() {
   selectedSessionIdForMenu = null;
   if (actionMenuEl) {
@@ -601,6 +613,7 @@ if (newChatBtn) {
     if (inpEl) inpEl.focus();
   });
 }
+
 function typeReply(bubbleEl, fullText) {
   return new Promise((resolve) => {
     if (!bubbleEl) {
@@ -628,8 +641,8 @@ function typeReply(bubbleEl, fullText) {
       }
     }, TYPEWRITER_DELAY_MS);
   });
-}
-if (formEl && inpEl && btnEl && chatEl) {
+        }
+                             if (formEl && inpEl && btnEl && chatEl) {
   formEl.onsubmit = async function (e) {
     e.preventDefault();
     const val = inpEl.value.trim();
@@ -748,7 +761,8 @@ if (formEl && inpEl && btnEl && chatEl) {
       inpEl.focus();
     }
   };
-      }
+}
+
 initSettingPage();
 loadSessions();
 renderHistoryList();
