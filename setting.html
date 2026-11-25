@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Setting - Playses AI</title>
+  <title>Playses AI - Setting</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -21,15 +21,9 @@
     <div class="history-section">
       <div class="history-header">
         <span class="history-title">Chats</span>
-        <button id="newChatBtn" class="new-chat-btn" type="button">+ New</button>
+        <a class="new-chat-btn" href="index.html">+ New</a>
       </div>
-      <div id="historyList" class="history-list">
-        <div id="historyActionMenu" class="history-action-menu" aria-hidden="true">
-          <button id="renameHistoryBtn" class="action-btn" type="button">Rename</button>
-          <button id="shareHistoryBtn" class="action-btn" type="button">Share</button>
-          <button id="deleteHistoryBtn" class="action-btn history-delete-btn" type="button">Delete</button>
-        </div>
-      </div>
+      <div id="historyList" class="history-list"></div>
     </div>
   </aside>
 
@@ -37,76 +31,176 @@
     <div class="head">
       <div class="head-left">
         <button id="openDrawer" class="burger-btn" type="button" aria-label="Buka menu">☰</button>
-        <strong>Setting</strong>
+        <strong>Playses AI - Setting</strong>
       </div>
-      <span>Privacy</span>
+      <div class="status-badge">
+        <span id="statusDot" class="status-dot online" aria-hidden="true"></span>
+        <span id="st">Ready</span>
+      </div>
     </div>
 
-    <div class="desc-body">
-      <div class="desc-card">
-        <h3>Shared Chat Link Access</h3>
-        <p>Choose whether shared chat links (<code>?chat=...</code>) can be opened when accessed.</p>
-
-        <div class="privacy-options">
-          <label class="privacy-option">
-            <input type="radio" name="shareMode" value="public" />
-            <div>
-              <strong>Public</strong>
-              <p>Shared chat links can be opened if the chat history still exists.</p>
-            </div>
-          </label>
-
-          <label class="privacy-option">
-            <input type="radio" name="shareMode" value="private" />
-            <div>
-              <strong>Private</strong>
-              <p>Links can still be shared, but opening them will be blocked.</p>
-            </div>
-          </label>
+    <div class="chat" style="padding: 16px; gap: 14px; overflow-y: auto;">
+      <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px;">
+        <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px;">Share Link Mode</div>
+        <div style="font-size: 13px; opacity: 0.85; line-height: 1.5; margin-bottom: 12px;">
+          Atur apakah link berbagi obrolan (<code>?s=...</code> atau <code>?chat=...</code>) bisa dibuka sebagai <strong>Public</strong> atau diblokir ke mode <strong>Private</strong>.
         </div>
 
-        <div id="settingSavedMsg" class="setting-saved" aria-live="polite"></div>
+        <label style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.03); margin-bottom: 8px; cursor: pointer;">
+          <input type="radio" name="shareMode" id="modePublic" value="public" />
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Public</div>
+            <div style="font-size: 12px; opacity: 0.75;">Link berbagi chat dapat dibuka dan disalin seperti biasa.</div>
+          </div>
+        </label>
+
+        <label style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.03); cursor: pointer;">
+          <input type="radio" name="shareMode" id="modePrivate" value="private" />
+          <div>
+            <div style="font-weight: 600; font-size: 14px;">Private</div>
+            <div style="font-size: 12px; opacity: 0.75;">Membuka link berbagi chat akan menampilkan layar privat.</div>
+          </div>
+        </label>
+      </div>
+            <div style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px;">
+        <div style="font-weight: 700; font-size: 15px; margin-bottom: 6px;">Storage &amp; Session Data</div>
+        <div style="font-size: 13px; opacity: 0.85; line-height: 1.5; margin-bottom: 12px;">
+          Kelola data riwayat percakapan yang tersimpan secara lokal di browser perangkat ini.
+        </div>
+
+        <button
+          id="clearHistoryBtn"
+          type="button"
+          style="padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.45); background: rgba(239,68,68,0.16); color: #fca5a5; font-weight: 600; cursor: pointer;"
+        >
+          Clear All Chat History
+        </button>
       </div>
     </div>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <script>
+    <script>
     (function () {
-      const openBtn = document.getElementById("openDrawer");
-      const closeBtn = document.getElementById("closeDrawer");
+      const STORAGE_SESSIONS_KEY = "playses_ai_sessions_v1";
+      const STORAGE_SHARE_MODE_KEY = "playses_ai_share_mode_v1";
+
+      const toastEl = document.getElementById("toast");
       const drawerEl = document.getElementById("drawer");
       const backdropEl = document.getElementById("backdrop");
+      const openDrawerBtn = document.getElementById("openDrawer");
+      const closeDrawerBtn = document.getElementById("closeDrawer");
+      const historyListEl = document.getElementById("historyList");
 
-      function toggleDrawer(forceOpen) {
-        if (!drawerEl || !backdropEl) return;
-        const next = typeof forceOpen === "boolean" ? forceOpen : !drawerEl.classList.contains("open");
-        drawerEl.classList.toggle("open", next);
-        backdropEl.classList.toggle("show", next);
+      const modePublicEl = document.getElementById("modePublic");
+      const modePrivateEl = document.getElementById("modePrivate");
+      const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+
+      function showToast(msg) {
+        if (!toastEl) return;
+        toastEl.textContent = msg;
+        toastEl.classList.add("show");
+        clearTimeout(showToast._timer);
+        showToast._timer = setTimeout(() => {
+          toastEl.classList.remove("show");
+        }, 2400);
       }
 
-      if (openBtn) {
-        openBtn.addEventListener("click", function (ev) {
+      function setDrawerOpen(isOpen) {
+        if (drawerEl) drawerEl.classList.toggle("open", isOpen);
+        if (backdropEl) backdropEl.classList.toggle("show", isOpen);
+      }
+
+      if (openDrawerBtn) {
+        openDrawerBtn.addEventListener("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          toggleDrawer(true);
+          setDrawerOpen(!(drawerEl && drawerEl.classList.contains("open")));
         });
       }
-      if (closeBtn) {
-        closeBtn.addEventListener("click", function (ev) {
+
+      if (closeDrawerBtn) {
+        closeDrawerBtn.addEventListener("click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          toggleDrawer(false);
+          setDrawerOpen(false);
         });
       }
+
       if (backdropEl) {
-        backdropEl.addEventListener("click", function () {
-          toggleDrawer(false);
+        backdropEl.addEventListener("click", () => setDrawerOpen(false));
+      }
+
+      function getShareMode() {
+        const mode = localStorage.getItem(STORAGE_SHARE_MODE_KEY);
+        return mode === "private" ? "private" : "public";
+      }
+
+      function setShareMode(mode) {
+        const normalized = mode === "private" ? "private" : "public";
+        localStorage.setItem(STORAGE_SHARE_MODE_KEY, normalized);
+        if (modePublicEl) modePublicEl.checked = normalized === "public";
+        if (modePrivateEl) modePrivateEl.checked = normalized === "private";
+        showToast("Share mode saved: " + normalized.toUpperCase());
+      }
+
+      if (modePublicEl) {
+        modePublicEl.addEventListener("change", () => {
+          if (modePublicEl.checked) setShareMode("public");
         });
       }
+
+      if (modePrivateEl) {
+        modePrivateEl.addEventListener("change", () => {
+          if (modePrivateEl.checked) setShareMode("private");
+        });
+      }
+
+      function renderDrawerHistoryPreview() {
+        if (!historyListEl) return;
+        historyListEl.innerHTML = "";
+        try {
+          const raw = localStorage.getItem(STORAGE_SESSIONS_KEY);
+          const parsed = raw ? JSON.parse(raw) : [];
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            const emptyEl = document.createElement("div");
+            emptyEl.className = "history-empty";
+            emptyEl.textContent = "No chat history yet";
+            historyListEl.appendChild(emptyEl);
+            return;
+          }
+          parsed.forEach((sess) => {
+            const link = document.createElement("a");
+            link.className = "history-item";
+            link.href = sess && sess.shareCode
+              ? `index.html?chat=${encodeURIComponent(sess.shareCode)}`
+              : "index.html";
+            link.textContent = (sess && sess.title) ? sess.title : "New Chat";
+            historyListEl.appendChild(link);
+          });
+        } catch (_) {
+          const emptyEl = document.createElement("div");
+          emptyEl.className = "history-empty";
+          emptyEl.textContent = "No chat history yet";
+          historyListEl.appendChild(emptyEl);
+        }
+      }
+
+      if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener("click", () => {
+          const confirmed = window.confirm("Hapus semua riwayat chat tersimpan?");
+          if (!confirmed) return;
+          localStorage.removeItem(STORAGE_SESSIONS_KEY);
+          renderDrawerHistoryPreview();
+          showToast("All chat history cleared");
+        });
+      }
+
+      const initialMode = getShareMode();
+      if (modePublicEl) modePublicEl.checked = initialMode === "public";
+      if (modePrivateEl) modePrivateEl.checked = initialMode === "private";
+      renderDrawerHistoryPreview();
     })();
   </script>
-  <script src="app.js"></script>
 </body>
 </html>
