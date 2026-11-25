@@ -61,7 +61,7 @@
 
   <script>
     (function () {
-      const BACKEND_API_URL = "https://regular-datebook-outburst.ngrok-free.dev/chat";
+      const BACKEND_STREAM_URL = "https://regular-datebook-outburst.ngrok-free.dev/chat/stream";
       const API_KEY = "playses-ai-key-tetap";
       const DISCORD_INVITE_URL = "https://discord.gg/QxRSNFfU5B";
       const SHARE_BASE_URL = "https://dragon-star-ui.github.io/Playses-AI-/index.html";
@@ -69,13 +69,6 @@
         "Sorry, there is a problem with the server or the server is down/not yet activated. Please check the server status in our discord community";
       const PRIVATE_LINK_TEXT =
         "This chat link has been changed to private mode by the owner.";
-
-      const THINKING_STEPS = [
-        "Thinking...",
-        "Reading your message...",
-        "Running LSTM inference...",
-        "Crafting the reply..."
-      ];
 
       const DUMMY_GREETINGS = [
         "Hey there! What would you like to talk about today?",
@@ -89,7 +82,7 @@
       const STORAGE_SHARE_MODE_KEY = "playses_ai_share_mode_v1";
       const CONTEXT_MESSAGE_LIMIT = 6;
       const LONG_PRESS_DURATION_MS = 500;
-      const TYPEWRITER_DELAY_MS = 40;
+      const TYPEWRITER_DELAY_MS = 30;
 
       const toastEl = document.getElementById("toast");
       const stEl = document.getElementById("st");
@@ -193,7 +186,7 @@
       if (backdropEl) {
         backdropEl.addEventListener("click", () => setDrawerOpen(false));
       }
-          function generateRandomChatCode() {
+            function generateRandomChatCode() {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         let out = "";
         for (let i = 0; i < 12; i++) {
@@ -612,7 +605,7 @@
 
           const clearPressTimer = () => {
             if (pressTimer !== null) {
-              clearTimeout(timer);
+              clearTimeout(pressTimer);
               pressTimer = null;
             }
           };
@@ -678,7 +671,7 @@
           setDrawerOpen(false);
           if (inpEl) inpEl.focus();
         });
-                      }
+            }
           function typeReply(bubbleEl, fullText) {
         return new Promise((resolve) => {
           if (!bubbleEl) {
@@ -738,34 +731,24 @@
           inpEl.value = "";
           inpEl.disabled = true;
           btnEl.disabled = true;
-          setStatusLabel("Thinking...", "online");
+          setStatusLabel("Connecting...", "online");
 
-          let stepIdx = 0;
-          const loadingBubble = appendMessageDOM(THINKING_STEPS[0], "bot");
-          if (loadingBubble) loadingBubble.dataset.fullText = "";
-          const thinkingTimer = setInterval(() => {
-            stepIdx = (stepIdx + 1) % THINKING_STEPS.length;
-            const nextStep = THINKING_STEPS[stepIdx];
-            if (loadingBubble) {
-              loadingBubble.textContent = nextStep;
-              if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
-            }
-            if (stEl) stEl.textContent = nextStep;
-          }, 1100);
+          const liveBubble = appendMessageDOM("Connecting to server...", "bot");
+          if (liveBubble) liveBubble.dataset.fullText = "";
 
-          const stopThinking = () => clearInterval(thinkingTimer);
+          let finalReplyText = "";
+          let gotAnyEvent = false;
 
           const showServerUnavailable = async () => {
-            stopThinking();
             setStatusLabel("Offline", "offline");
-            if (loadingBubble) {
-              await typeReply(loadingBubble, SERVER_UNAVAILABLE_TEXT);
+            if (liveBubble) {
+              await typeReply(liveBubble, SERVER_UNAVAILABLE_TEXT);
             }
             session.messages.push({ text: SERVER_UNAVAILABLE_TEXT, cls: "bot" });
             saveSessions();
           };
 
-          if (!BACKEND_API_URL) {
+          if (!BACKEND_STREAM_URL) {
             await showServerUnavailable();
             inpEl.disabled = false;
             btnEl.disabled = false;
@@ -774,7 +757,7 @@
           }
 
           try {
-            const r = await fetch(BACKEND_API_URL, {
+            const r = await fetch(BACKEND_STREAM_URL, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -787,38 +770,78 @@
               })
             });
 
-            if (!r.ok) {
+            if (!r.ok || !r.body) {
               await showServerUnavailable();
               return;
             }
 
-            const rawText = await r.text();
-            let data = {};
-            try {
-              data = JSON.parse(rawText);
-            } catch (_) {
-              data = {};
+            const reader = r.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let buffer = "";
+
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              buffer += decoder.decode(value, { stream: true });
+
+              const parts = buffer.split("\n\n");
+              buffer = parts.pop() || "";
+
+              for (const chunk of parts) {
+                const line = chunk
+                  .split("\n")
+                  .find((l) => l.startsWith("data: "));
+                if (!line) continue;
+
+                let evt = null;
+                try {
+                  evt = JSON.parse(line.slice(6));
+                } catch (_) {
+                  continue;
+                }
+                if (!evt) continue;
+                gotAnyEvent = true;
+
+                if (evt.type === "status" && evt.status) {
+                  setStatusLabel(evt.status, "online");
+                  if (!finalReplyText && liveBubble) {
+                    liveBubble.textContent = evt.status;
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                  }
+                } else if (evt.type === "delta" && typeof evt.text === "string") {
+                  finalReplyText = evt.text;
+                  setStatusLabel("Generating...", "online");
+                  if (liveBubble) {
+                    liveBubble.dataset.fullText = finalReplyText;
+                    setMessageBubbleContent(liveBubble, finalReplyText);
+                    chatEl.scrollTop = chatEl.scrollHeight;
+                  }
+                } else if (evt.type === "done") {
+                  finalReplyText =
+                    typeof evt.reply === "string" && evt.reply.trim()
+                      ? evt.reply.trim()
+                      : (finalReplyText || "Hmm, aku belum nemu kata yang pas buat jawab itu.");
+                }
+              }
             }
 
-            stopThinking();
-
-            if (!data.reply) {
+            if (!gotAnyEvent || !finalReplyText) {
               await showServerUnavailable();
               return;
             }
 
             setStatusLabel("Online", "online");
-            const replyText = String(data.reply);
-            if (loadingBubble) {
-              await typeReply(loadingBubble, replyText);
+            if (liveBubble) {
+              liveBubble.dataset.fullText = finalReplyText;
+              setMessageBubbleContent(liveBubble, finalReplyText);
+              chatEl.scrollTop = chatEl.scrollHeight;
             }
 
-            session.messages.push({ text: replyText, cls: "bot" });
+            session.messages.push({ text: finalReplyText, cls: "bot" });
             saveSessions();
           } catch (_) {
             await showServerUnavailable();
           } finally {
-            stopThinking();
             inpEl.disabled = false;
             btnEl.disabled = false;
             inpEl.focus();
