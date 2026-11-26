@@ -58,10 +58,10 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-
-  <script>
+    <script>
     (function () {
       const BACKEND_STREAM_URL = "https://regular-datebook-outburst.ngrok-free.dev/chat/stream";
+      const BACKEND_TTS_URL = "https://regular-datebook-outburst.ngrok-free.dev/tts?voice=actor1";
       const API_KEY = "playses-ai-key-tetap";
       const DISCORD_INVITE_URL = "https://discord.gg/QxRSNFfU5B";
       const SHARE_BASE_URL = "https://dragon-star-ui.github.io/Playses-AI-/index.html";
@@ -113,6 +113,7 @@
       let selectedBotMessageText = "";
       let privateLinkBlocked = false;
       let cancelPendingLongPress = null;
+      let activeTtsAudio = null;
 
       function showToast(msg) {
         if (!toastEl) return;
@@ -186,7 +187,8 @@
       if (backdropEl) {
         backdropEl.addEventListener("click", () => setDrawerOpen(false));
       }
-            function generateRandomChatCode() {
+
+      function generateRandomChatCode() {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         let out = "";
         for (let i = 0; i < 12; i++) {
@@ -380,526 +382,356 @@
         msgActionMenuEl.setAttribute("aria-hidden", "false");
       }
 
-      if (copyMsgBtn) {
-        copyMsgBtn.addEventListener("click", async (e) => {
-          e.stopPropagation();
-          const textToCopy = selectedBotMessageText;
-          closeMsgActionMenu();
-          const ok = await copyToClipboard(textToCopy);
-          showToast(ok ? "Copied" : "Copy failed");
-        });
+      async function speakBotText(text, btn) {
+        if (!text) return;
+        if (activeTtsAudio) {
+          activeTtsAudio.pause();
+          activeTtsAudio = null;
+        }
+        const oldLabel = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = "...";
+        try {
+          const sep = BACKEND_TTS_URL.includes("?") ? "&" : "?";
+          const res = await fetch(`${BACKEND_TTS_URL}${sep}text=${encodeURIComponent(text)}`, {
+            method: "GET",
+            headers: {
+              "X-API-Key": API_KEY,
+              "ngrok-skip-browser-warning": "true"
+            }
+          });
+          if (!res.ok) throw new Error(String(res.status));
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const audio = new Audio(url);
+          activeTtsAudio = audio;
+          audio.onended = () => {
+            URL.revokeObjectURL(url);
+            btn.disabled = false;
+            btn.textContent = oldLabel;
+          };
+          audio.onerror = () => {
+            URL.revokeObjectURL(url);
+            btn.disabled = false;
+            btn.textContent = oldLabel;
+          };
+          await audio.play();
+        } catch (_) {
+          btn.disabled = false;
+          btn.textContent = oldLabel;
+        }
       }
+            function renderMessageBubble(cls, text) {
+        const bubble = document.createElement("div");
+        bubble.className = "msg " + (cls === "user" ? "user" : "bot");
+        bubble.dataset.rawText = text;
 
-      function bindBotBubbleLongPress(el, getTextFn) {
-        let timer = null;
-        let startX = 0;
-        let startY = 0;
-        const clearTimer = () => {
-          if (timer !== null) {
-            clearTimeout(timer);
-            timer = null;
-          }
-        };
-        cancelPendingLongPress = clearTimer;
+        const textEl = document.createElement("div");
+        setMessageBubbleContent(textEl, text);
+        bubble.appendChild(textEl);
 
-        el.addEventListener("pointerdown", (e) => {
-          if (e.button !== undefined && e.button !== 0 && e.pointerType === "mouse") return;
-          startX = e.clientX;
-          startY = e.clientY;
-          const xAtDown = e.clientX;
-          const yAtDown = e.clientY;
-          clearTimer();
-          timer = setTimeout(() => {
-            timer = null;
-            const currentText = getTextFn();
-            if (currentText) openMsgActionMenu(currentText, xAtDown, yAtDown, el);
+        if (cls !== "user") {
+          const footer = document.createElement("div");
+          footer.className = "msg-voice-row";
+          const voiceBtn = document.createElement("button");
+          voiceBtn.type = "button";
+          voiceBtn.className = "tts-btn";
+          voiceBtn.textContent = "🔊";
+          voiceBtn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            const currentText = bubble.dataset.rawText || textEl.textContent || "";
+            speakBotText(currentText, voiceBtn);
+          });
+          footer.appendChild(voiceBtn);
+          bubble.appendChild(footer);
+        }
+
+        bubble.addEventListener("contextmenu", (ev) => {
+          ev.preventDefault();
+          const currentText = bubble.dataset.rawText || textEl.textContent || "";
+          openMsgActionMenu(currentText, ev.clientX, ev.clientY, bubble);
+        });
+
+        bubble.addEventListener("touchstart", (ev) => {
+          if (ev.target.closest(".tts-btn")) return;
+          if (cancelPendingLongPress) cancelPendingLongPress();
+          const touch = ev.touches && ev.touches[0];
+          const tx = touch ? touch.clientX : 24;
+          const ty = touch ? touch.clientY : 120;
+          const timer = setTimeout(() => {
+            const currentText = bubble.dataset.rawText || textEl.textContent || "";
+            openMsgActionMenu(currentText, tx, ty, bubble);
           }, LONG_PRESS_DURATION_MS);
+          cancelPendingLongPress = () => clearTimeout(timer);
+        }, { passive: true });
+
+        bubble.addEventListener("touchend", () => {
+          if (cancelPendingLongPress) {
+            cancelPendingLongPress();
+            cancelPendingLongPress = null;
+          }
         });
 
-        el.addEventListener("pointermove", (e) => {
-          if (timer === null) return;
-          if (Math.abs(e.clientX - startX) > 6 || Math.abs(e.clientY - startY) > 6) clearTimer();
-        });
+        bubble.addEventListener("touchmove", () => {
+          if (cancelPendingLongPress) {
+            cancelPendingLongPress();
+            cancelPendingLongPress = null;
+          }
+        }, { passive: true });
 
-        el.addEventListener("pointerup", clearTimer);
-        el.addEventListener("pointercancel", clearTimer);
-        el.addEventListener("contextmenu", (e) => {
-          e.preventDefault();
-          clearTimer();
-          const currentText = getTextFn();
-          if (currentText) openMsgActionMenu(currentText, e.clientX, e.clientY, el);
-        });
-      }
-
-      function appendMessageDOM(text, cls) {
-        if (!chatEl) return null;
-        const d = document.createElement("div");
-        d.className = "msg " + cls;
-        setMessageBubbleContent(d, text);
-        if (cls === "bot") {
-          d.dataset.fullText = text;
-          bindBotBubbleLongPress(d, () => d.dataset.fullText || d.textContent || "");
-        }
-        chatEl.appendChild(d);
+        chatEl.appendChild(bubble);
         chatEl.scrollTop = chatEl.scrollHeight;
-        return d;
+        return { bubble, textEl };
       }
 
-      function renderRandomDummyGreeting() {
-        if (!chatEl) return;
-        const greeting = DUMMY_GREETINGS[Math.floor(Math.random() * DUMMY_GREETINGS.length)];
-        const box = document.createElement("div");
-        box.className = "dummy-greeting";
-        box.textContent = greeting;
-        chatEl.appendChild(box);
+      function addMessage(cls, text, save = true) {
+        const rendered = renderMessageBubble(cls, text);
+        if (save) {
+          let sess = getActiveSession();
+          if (!sess) {
+            sess = createNewSessionWithFirstMessage(text);
+          }
+          sess.messages.push({ cls: cls === "user" ? "user" : "bot", text });
+          saveSessions();
+          renderHistoryList();
+        }
+        return rendered;
       }
 
-      function renderPrivateBlackScreen() {
-        if (!chatEl) return;
-        document.body.style.background = "#000000";
-        chatEl.style.background = "#000000";
-        chatEl.innerHTML = "";
-        const box = document.createElement("div");
-        box.style.margin = "auto";
-        box.style.padding = "18px";
-        box.style.color = "#f8fafc";
-        box.style.textAlign = "center";
-        box.style.fontSize = "14px";
-        box.textContent = PRIVATE_LINK_TEXT;
-        chatEl.appendChild(box);
-      }
-
-      function renderChatArea() {
+      function renderActiveSession() {
         if (!chatEl) return;
         chatEl.innerHTML = "";
-        if (privateLinkBlocked) {
-          renderPrivateBlackScreen();
-          return;
-        }
-        const current = getActiveSession();
-        if (!current || !Array.isArray(current.messages) || current.messages.length === 0) {
-          renderRandomDummyGreeting();
-          return;
-        }
-        current.messages.forEach((m) => appendMessageDOM(m.text, m.cls));
-      }
-
-      function openHistoryActionMenu(sessionId, anchorEl) {
-        if (!actionMenuEl) return;
-        selectedSessionIdForMenu = sessionId;
-        if (anchorEl && historyListEl) {
-          const itemRect = anchorEl.getBoundingClientRect();
-          const listRect = historyListEl.getBoundingClientRect();
-          actionMenuEl.style.top = Math.max(0, itemRect.bottom - listRect.top + 4) + "px";
-        }
-        actionMenuEl.classList.add("show");
-        actionMenuEl.setAttribute("aria-hidden", "false");
-      }
-
-      function renameSessionById(sessionId) {
-        const sess = sessions.find((s) => s.id === sessionId);
-        if (!sess) return;
-        const nextTitle = window.prompt("Rename chat:", sess.title || "New Chat");
-        if (nextTitle !== null) {
-          const trimmed = nextTitle.trim();
-          if (trimmed) {
-            sess.title = trimmed;
-            saveSessions();
-            renderHistoryList();
-            showToast("Title updated");
-          }
-        }
-        closeHistoryActionMenu();
-      }
-
-      async function shareSessionById(sessionId) {
-        const sess = sessions.find((s) => s.id === sessionId);
-        if (!sess) return;
-        if (getShareMode() === "private") {
-          closeHistoryActionMenu();
-          showToast("Share mode is Private. Change to Public in Setting first.");
-          return;
-        }
-        const shareUrl = buildShareUrl(sess);
-        const copied = await copyToClipboard(shareUrl);
-        closeHistoryActionMenu();
-        showToast(copied ? "Share link copied!" : shareUrl);
-      }
-
-      function deleteSessionById(sessionId) {
-        if (!sessionId) return;
-        sessions = sessions.filter((s) => s.id !== sessionId);
-        saveSessions();
-        if (activeSessionId === sessionId) {
-          activeSessionId = null;
-          privateLinkBlocked = false;
-          updateUrlForSession(null);
-          renderChatArea();
-        }
-        closeHistoryActionMenu();
-        renderHistoryList();
-        showToast("Chat deleted");
-      }
-
-      if (renameHistoryBtn) {
-        renameHistoryBtn.addEventListener("click", () => {
-          if (selectedSessionIdForMenu) renameSessionById(selectedSessionIdForMenu);
-        });
-      }
-      if (shareHistoryBtn) {
-        shareHistoryBtn.addEventListener("click", () => {
-          if (selectedSessionIdForMenu) shareSessionById(selectedSessionIdForMenu);
-        });
-      }
-      if (deleteHistoryBtn) {
-        deleteHistoryBtn.addEventListener("click", () => {
-          if (selectedSessionIdForMenu) deleteSessionById(selectedSessionIdForMenu);
-        });
-      }
-
-      document.addEventListener("pointerdown", (e) => {
-        if (actionMenuEl && actionMenuEl.classList.contains("show")) {
-          if (!actionMenuEl.contains(e.target) && !e.target.closest(".history-item")) {
-            closeHistoryActionMenu();
-          }
-        }
-        if (msgActionMenuEl && msgActionMenuEl.classList.contains("show")) {
-          if (!msgActionMenuEl.contains(e.target) && !e.target.closest(".bot")) {
-            closeMsgActionMenu();
-          }
-        }
-      });
-
-      if (chatEl) {
-        chatEl.addEventListener("scroll", () => {
-          if (typeof cancelPendingLongPress === "function") cancelPendingLongPress();
-          closeMsgActionMenu();
+        const sess = getActiveSession();
+        if (!sess || !Array.isArray(sess.messages)) return;
+        sess.messages.forEach((m) => {
+          renderMessageBubble(m.cls, m.text);
         });
       }
 
       function renderHistoryList() {
         if (!historyListEl) return;
-        closeHistoryActionMenu();
-        historyListEl.querySelectorAll(".history-item").forEach((el) => el.remove());
-        const existingEmpty = historyListEl.querySelector(".history-empty");
-        if (existingEmpty) existingEmpty.remove();
-
-        if (sessions.length === 0) {
-          const emptyEl = document.createElement("div");
-          emptyEl.className = "history-empty";
-          emptyEl.textContent = "No chat history yet";
-          historyListEl.prepend(emptyEl);
-          return;
-        }
-
+        Array.from(historyListEl.querySelectorAll(".history-item")).forEach((el) => el.remove());
         sessions.forEach((sess) => {
-          const itemBtn = document.createElement("button");
-          itemBtn.type = "button";
-          itemBtn.className = "history-item" + (sess.id === activeSessionId ? " active" : "");
-          itemBtn.textContent = sess.title || "New Chat";
-
-          let pressTimer = null;
-          let longPressTriggered = false;
-          let startX = 0;
-          let startY = 0;
-
-          const clearPressTimer = () => {
-            if (pressTimer !== null) {
-              clearTimeout(pressTimer);
-              pressTimer = null;
-            }
-          };
-
-          itemBtn.addEventListener("pointerdown", (e) => {
-            longPressTriggered = false;
-            startX = e.clientX;
-            startY = e.clientY;
-            clearPressTimer();
-            pressTimer = setTimeout(() => {
-              longPressTriggered = true;
-              openHistoryActionMenu(sess.id, itemBtn);
-            }, LONG_PRESS_DURATION_MS);
-          });
-
-          itemBtn.addEventListener("pointermove", (e) => {
-            if (pressTimer === null) return;
-            if (Math.abs(e.clientX - startX) > 6 || Math.abs(e.clientY - startY) > 6) {
-              clearPressTimer();
-            }
-          });
-
-          itemBtn.addEventListener("pointerup", clearPressTimer);
-          itemBtn.addEventListener("pointercancel", clearPressTimer);
-          itemBtn.addEventListener("contextmenu", (e) => {
-            e.preventDefault();
-            clearPressTimer();
-            openHistoryActionMenu(sess.id, itemBtn);
-          });
-
-          itemBtn.addEventListener("click", () => {
-            if (longPressTriggered) {
-              longPressTriggered = false;
-              return;
-            }
-            if (actionMenuEl && actionMenuEl.classList.contains("show")) {
-              closeHistoryActionMenu();
-              return;
-            }
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "history-item" + (sess.id === activeSessionId ? " active" : "");
+          btn.textContent = sess.title || "New Chat";
+          btn.addEventListener("click", () => {
             privateLinkBlocked = false;
             activeSessionId = sess.id;
+            saveSessions();
             updateUrlForSession(sess);
             renderHistoryList();
-            renderChatArea();
+            renderActiveSession();
             setDrawerOpen(false);
           });
-
-          if (actionMenuEl && actionMenuEl.parentElement === historyListEl) {
-            historyListEl.insertBefore(itemBtn, actionMenuEl);
-          } else {
-            historyListEl.appendChild(itemBtn);
-          }
+          btn.addEventListener("contextmenu", (ev) => {
+            ev.preventDefault();
+            selectedSessionIdForMenu = sess.id;
+            if (actionMenuEl) {
+              actionMenuEl.classList.add("show");
+              actionMenuEl.setAttribute("aria-hidden", "false");
+            }
+          });
+          historyListEl.appendChild(btn);
         });
       }
 
       if (newChatBtn) {
         newChatBtn.addEventListener("click", () => {
-          activeSessionId = null;
           privateLinkBlocked = false;
+          activeSessionId = null;
           updateUrlForSession(null);
           renderHistoryList();
-          renderChatArea();
-          setDrawerOpen(false);
-          if (inpEl) inpEl.focus();
-        });
-            }
-          function typeReply(bubbleEl, fullText) {
-        return new Promise((resolve) => {
-          if (!bubbleEl) {
-            resolve();
-            return;
+          if (chatEl) {
+            chatEl.innerHTML = "";
+            const g = DUMMY_GREETINGS[Math.floor(Math.random() * DUMMY_GREETINGS.length)];
+            renderMessageBubble("bot", g);
           }
-          bubbleEl.dataset.fullText = fullText;
-          bubbleEl.textContent = "";
-          const chars = Array.from(fullText);
-          let i = 0;
-          const interval = setInterval(() => {
-            if (i < chars.length) {
-              bubbleEl.textContent += chars[i];
-              i += 1;
-              if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
-            } else {
-              clearInterval(interval);
-              setMessageBubbleContent(bubbleEl, fullText);
-              if (msgActionMenuEl && msgActionMenuEl.classList.contains("show")) {
-                selectedBotMessageText = fullText;
-              }
-              if (chatEl) chatEl.scrollTop = chatEl.scrollHeight;
-              resolve();
-            }
-          }, TYPEWRITER_DELAY_MS);
+          setDrawerOpen(false);
         });
       }
 
-      if (formEl && inpEl && btnEl && chatEl) {
-        formEl.onsubmit = async function (e) {
-          e.preventDefault();
-          const val = inpEl.value.trim();
-          if (!val) return;
-
-          closeHistoryActionMenu();
+      if (copyMsgBtn) {
+        copyMsgBtn.addEventListener("click", async () => {
+          const ok = await copyToClipboard(selectedBotMessageText);
+          showToast(ok ? "Copied" : "Copy failed");
           closeMsgActionMenu();
+        });
+      }
 
-          let session = getActiveSession();
-          if (!session) {
-            session = createNewSessionWithFirstMessage(val);
-            renderHistoryList();
-          } else {
-            updateUrlForSession(session);
-          }
-
-          const recentHistory = session.messages
-            .slice(-CONTEXT_MESSAGE_LIMIT)
-            .map((m) => ({
-              role: m.cls === "user" ? "user" : "assistant",
-              content: m.text
-            }));
-
-          session.messages.push({ text: val, cls: "user" });
-          saveSessions();
-          appendMessageDOM(val, "user");
-
-          inpEl.value = "";
-          inpEl.disabled = true;
-          btnEl.disabled = true;
-          setStatusLabel("Connecting...", "online");
-
-          const liveBubble = appendMessageDOM("Connecting to server...", "bot");
-          if (liveBubble) liveBubble.dataset.fullText = "";
-
-          let finalReplyText = "";
-          let gotAnyEvent = false;
-
-          const showServerUnavailable = async () => {
-            setStatusLabel("Offline", "offline");
-            if (liveBubble) {
-              await typeReply(liveBubble, SERVER_UNAVAILABLE_TEXT);
-            }
-            session.messages.push({ text: SERVER_UNAVAILABLE_TEXT, cls: "bot" });
+      if (renameHistoryBtn) {
+        renameHistoryBtn.addEventListener("click", () => {
+          const target = sessions.find((s) => s.id === selectedSessionIdForMenu);
+          closeHistoryActionMenu();
+          if (!target) return;
+          const next = prompt("Rename", target.title || "New Chat");
+          if (next && next.trim()) {
+            target.title = next.trim();
             saveSessions();
-          };
+            renderHistoryList();
+          }
+        });
+      }
 
-          if (!BACKEND_STREAM_URL) {
-            await showServerUnavailable();
-            inpEl.disabled = false;
-            btnEl.disabled = false;
-            inpEl.focus();
+      if (shareHistoryBtn) {
+        shareHistoryBtn.addEventListener("click", async () => {
+          const target = sessions.find((s) => s.id === selectedSessionIdForMenu);
+          closeHistoryActionMenu();
+          if (!target) return;
+          if (getShareMode() === "private") {
+            showToast(PRIVATE_LINK_TEXT);
+            return;
+          }
+          const ok = await copyToClipboard(buildShareUrl(target));
+          showToast(ok ? "Link copied" : "Copy failed");
+        });
+      }
+
+      if (deleteHistoryBtn) {
+        deleteHistoryBtn.addEventListener("click", () => {
+          const id = selectedSessionIdForMenu;
+          closeHistoryActionMenu();
+          if (!id) return;
+          sessions = sessions.filter((s) => s.id !== id);
+          if (activeSessionId === id) {
+            activeSessionId = sessions[0] ? sessions[0].id : null;
+            updateUrlForSession(getActiveSession());
+            renderActiveSession();
+          }
+          saveSessions();
+          renderHistoryList();
+        });
+      }
+
+      document.addEventListener("click", (ev) => {
+        if (!ev.target.closest("#msgActionMenu")) closeMsgActionMenu();
+        if (!ev.target.closest("#historyActionMenu") && !ev.target.closest(".history-item")) {
+          closeHistoryActionMenu();
+        }
+      });
+
+      if (formEl && inpEl) {
+        formEl.addEventListener("submit", async (ev) => {
+          ev.preventDefault();
+          const msg = (inpEl.value || "").trim();
+          if (!msg) return;
+
+          if (privateLinkBlocked) {
+            addMessage("user", msg, false);
+            addMessage("bot", PRIVATE_LINK_TEXT, false);
+            inpEl.value = "";
             return;
           }
 
+          inpEl.value = "";
+          if (btnEl) btnEl.disabled = true;
+          addMessage("user", msg, true);
+
+          const botItem = renderMessageBubble("bot", "");
+          botItem.bubble.dataset.rawText = "";
+          setStatusLabel("Thinking...", "online");
+
+          let finalReply = "";
           try {
-            const r = await fetch(BACKEND_STREAM_URL, {
+            const sess = getActiveSession();
+            const history = sess && Array.isArray(sess.messages)
+              ? sess.messages.slice(-CONTEXT_MESSAGE_LIMIT)
+              : [];
+
+            const res = await fetch(BACKEND_STREAM_URL, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
                 "X-API-Key": API_KEY,
                 "ngrok-skip-browser-warning": "true"
               },
-              body: JSON.stringify({
-                message: val,
-                history: recentHistory
-              })
+              body: JSON.stringify({ message: msg, history })
             });
+            if (!res.ok || !res.body) throw new Error(String(res.status));
 
-            if (!r.ok || !r.body) {
-              await showServerUnavailable();
-              return;
-            }
-
-            const reader = r.body.getReader();
+            const reader = res.body.getReader();
             const decoder = new TextDecoder("utf-8");
-            let buffer = "";
+            let buf = "";
 
             while (true) {
               const { value, done } = await reader.read();
               if (done) break;
-              buffer += decoder.decode(value, { stream: true });
+              buf += decoder.decode(value, { stream: true });
+              const parts = buf.split("\n\n");
+              buf = parts.pop() || "";
 
-              const parts = buffer.split("\n\n");
-              buffer = parts.pop() || "";
-
-              for (const chunk of parts) {
-                const line = chunk
-                  .split("\n")
-                  .find((l) => l.startsWith("data: "));
+              for (const part of parts) {
+                const line = part.split("\n").find((l) => l.startsWith("data: "));
                 if (!line) continue;
-
-                let evt = null;
+                let evt;
                 try {
-                  evt = JSON.parse(line.slice(6));
+                  evt = JSON.parse(line.slice(6).trim());
                 } catch (_) {
                   continue;
                 }
-                if (!evt) continue;
-                gotAnyEvent = true;
-
                 if (evt.type === "status" && evt.status) {
                   setStatusLabel(evt.status, "online");
-                  if (!finalReplyText && liveBubble) {
-                    liveBubble.textContent = evt.status;
-                    chatEl.scrollTop = chatEl.scrollHeight;
-                  }
                 } else if (evt.type === "delta" && typeof evt.text === "string") {
-                  finalReplyText = evt.text;
-                  setStatusLabel("Generating...", "online");
-                  if (liveBubble) {
-                    liveBubble.dataset.fullText = finalReplyText;
-                    setMessageBubbleContent(liveBubble, finalReplyText);
-                    chatEl.scrollTop = chatEl.scrollHeight;
-                  }
-                } else if (evt.type === "done") {
-                  finalReplyText =
-                    typeof evt.reply === "string" && evt.reply.trim()
-                      ? evt.reply.trim()
-                      : (finalReplyText || "Hmm, aku belum nemu kata yang pas buat jawab itu.");
+                  finalReply = evt.text;
+                  botItem.bubble.dataset.rawText = finalReply;
+                  setMessageBubbleContent(botItem.textEl, finalReply);
+                  chatEl.scrollTop = chatEl.scrollHeight;
+                } else if (evt.type === "done" && typeof evt.reply === "string" && evt.reply.trim()) {
+                  finalReply = evt.reply.trim();
                 }
               }
             }
 
-            if (!gotAnyEvent || !finalReplyText) {
-              await showServerUnavailable();
-              return;
-            }
+            if (!finalReply) finalReply = "Hmm, I couldn't find the right words to answer that.";
+            botItem.bubble.dataset.rawText = finalReply;
+            setMessageBubbleContent(botItem.textEl, finalReply);
+            setStatusLabel("Ready", "online");
 
-            setStatusLabel("Online", "online");
-            if (liveBubble) {
-              liveBubble.dataset.fullText = finalReplyText;
-              setMessageBubbleContent(liveBubble, finalReplyText);
-              chatEl.scrollTop = chatEl.scrollHeight;
+            const activeSess = getActiveSession();
+            if (activeSess) {
+              activeSess.messages.push({ cls: "bot", text: finalReply });
+              saveSessions();
             }
-
-            session.messages.push({ text: finalReplyText, cls: "bot" });
-            saveSessions();
           } catch (_) {
-            await showServerUnavailable();
+            setMessageBubbleContent(botItem.textEl, SERVER_UNAVAILABLE_TEXT);
+            botItem.bubble.dataset.rawText = SERVER_UNAVAILABLE_TEXT;
+            setStatusLabel("Offline", "offline");
           } finally {
-            inpEl.disabled = false;
-            btnEl.disabled = false;
-            inpEl.focus();
+            if (btnEl) btnEl.disabled = false;
+            chatEl.scrollTop = chatEl.scrollHeight;
           }
-        };
+        });
       }
 
       loadSessions();
-      renderHistoryList();
-      setStatusLabel("Ready", "online");
+      const params = new URLSearchParams(window.location.search);
+      const sParam = params.get("s");
+      const cParam = params.get("chat");
 
-      if (chatEl) {
-        const params = new URLSearchParams(window.location.search);
-        const sharedPayload = params.get("s");
-        const legacyCode = params.get("chat");
-
-        if (sharedPayload) {
-          if (getShareMode() === "private") {
-            activeSessionId = null;
-            privateLinkBlocked = true;
-            renderPrivateBlackScreen();
-          } else {
-            const decoded = decodeSessionFromBase64(sharedPayload);
-            if (decoded) {
-              activeSessionId = null;
-              privateLinkBlocked = false;
-              chatEl.innerHTML = "";
-              const banner = document.createElement("div");
-              banner.className = "system-msg";
-              banner.textContent = `Shared Chat: ${decoded.title}`;
-              chatEl.appendChild(banner);
-              decoded.messages.forEach((m) => appendMessageDOM(m.text, m.cls));
-            } else {
-              activeSessionId = null;
-              privateLinkBlocked = false;
-              renderChatArea();
-              showToast("Invalid or corrupted share link.");
-            }
-          }
-        } else if (legacyCode) {
-          const matchedSession = sessions.find((s) => s.shareCode === legacyCode);
-          if (getShareMode() === "private") {
-            activeSessionId = null;
-            privateLinkBlocked = true;
-          } else if (matchedSession) {
-            activeSessionId = matchedSession.id;
-            privateLinkBlocked = false;
-          } else {
-            activeSessionId = null;
-            privateLinkBlocked = false;
-          }
-          renderChatArea();
+      if (sParam) {
+        if (getShareMode() === "private") {
+          privateLinkBlocked = true;
+          renderMessageBubble("bot", PRIVATE_LINK_TEXT);
         } else {
-          activeSessionId = null;
-          privateLinkBlocked = false;
-          renderChatArea();
+          const decoded = decodeSessionFromBase64(sParam);
+          if (decoded) decoded.messages.forEach((m) => renderMessageBubble(m.cls, m.text));
         }
+      } else if (cParam) {
+        const found = sessions.find((s) => s.shareCode === cParam);
+        if (found) {
+          activeSessionId = found.id;
+          renderActiveSession();
+        }
+      } else if (sessions.length > 0) {
+        activeSessionId = sessions[0].id;
+        renderActiveSession();
+      } else {
+        const g = DUMMY_GREETINGS[Math.floor(Math.random() * DUMMY_GREETINGS.length)];
+        renderMessageBubble("bot", g);
       }
+
+      renderHistoryList();
     })();
   </script>
 </body>
